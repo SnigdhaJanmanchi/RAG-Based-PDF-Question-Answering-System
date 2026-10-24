@@ -1,1 +1,1 @@
-"""Domain services (PDF parsing, embeddings, FAISS, RAG) — implemented in later phases."""
+"""Domain services: PDF parsing, chunking, embeddings, FAISS, ingest (RAG in Phase 3)."""

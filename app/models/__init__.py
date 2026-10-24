@@ -1,5 +1,21 @@
 """Pydantic request/response schemas."""
 
-from app.models.schemas import HealthResponse
+from app.models.schemas import (
+    DocumentInfo,
+    DocumentListResponse,
+    HealthResponse,
+    SearchHitResponse,
+    SearchRequest,
+    SearchResponse,
+    UploadResponse,
+)
 
-__all__ = ["HealthResponse"]
+__all__ = [
+    "DocumentInfo",
+    "DocumentListResponse",
+    "HealthResponse",
+    "SearchHitResponse",
+    "SearchRequest",
+    "SearchResponse",
+    "UploadResponse",
+]

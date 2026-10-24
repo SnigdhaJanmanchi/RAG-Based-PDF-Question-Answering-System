@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Runtime settings for the API and (later) RAG pipeline."""
+    """Runtime settings for the API and RAG ingest pipeline."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     chunk_overlap: int = Field(default=200, alias="CHUNK_OVERLAP")
     top_k: int = Field(default=5, alias="TOP_K")
     data_dir: str = Field(default="data", alias="DATA_DIR")
+    max_upload_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        alias="MAX_UPLOAD_BYTES",
+        description="Maximum accepted PDF upload size in bytes (default 10 MiB).",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

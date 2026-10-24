@@ -1,8 +1,10 @@
 """FastAPI application factory and ASGI entrypoint."""
 
+from __future__ import annotations
+
 import logging
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,13 +15,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app import __version__
 from app.api.routes import router
 from app.config import get_settings
+from app.exceptions import AppError
 from app.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level)
     logger.info(
@@ -28,6 +31,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         __version__,
         settings.app_env,
     )
+    # Embedding model + FAISS store are created lazily on first ingest/search
+    # so /health stays cheap. They are loaded once and reused (singleton).
+    app.state.vector_store = None
+    app.state.embedding_service = None
     yield
     logger.info("Shutting down %s", settings.app_name)
 
@@ -42,7 +49,8 @@ def create_app() -> FastAPI:
         version=__version__,
         description=(
             "RAG-based PDF question answering API. "
-            "Phase 0–1: health and scaffolding only."
+            "Phase 2: PDF upload, chunking, embeddings, and FAISS search "
+            "(no LLM answers yet)."
         ),
         lifespan=lifespan,
     )
@@ -54,6 +62,20 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @application.exception_handler(AppError)
+    async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+        logger.warning(
+            "AppError %s on %s %s: %s",
+            exc.status_code,
+            request.method,
+            request.url.path,
+            exc.message,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.message},
+        )
 
     @application.exception_handler(StarletteHTTPException)
     async def http_exception_handler(
