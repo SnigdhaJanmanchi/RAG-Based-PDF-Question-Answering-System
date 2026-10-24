@@ -24,7 +24,11 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("CHUNK_SIZE", "200")
     monkeypatch.setenv("CHUNK_OVERLAP", "40")
     monkeypatch.setenv("TOP_K", "3")
+    monkeypatch.setenv("SIMILARITY_THRESHOLD", "0.15")
+    monkeypatch.setenv("CONTEXT_TOKEN_BUDGET", "2000")
     monkeypatch.setenv("MAX_UPLOAD_BYTES", str(2 * 1024 * 1024))
+    # Default: no real key in unit/API suite (tests that need a key set it explicitly).
+    monkeypatch.setenv("OPENAI_API_KEY", "")
     get_settings.cache_clear()
     yield root
     get_settings.cache_clear()

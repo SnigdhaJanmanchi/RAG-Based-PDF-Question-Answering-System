@@ -64,3 +64,42 @@ class SearchHitResponse(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: list[SearchHitResponse]
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, description="Natural-language question")
+    document_id: str | None = Field(
+        default=None,
+        description="Optional: answer using only one indexed document",
+    )
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Override default TOP_K for retrieval",
+    )
+
+
+class AskSource(BaseModel):
+    document_id: str
+    filename: str
+    page: int
+    chunk_id: str
+    excerpt: str
+    score: float
+
+
+class AskDocumentRef(BaseModel):
+    document_id: str
+    filename: str
+
+
+class AskResponse(BaseModel):
+    question: str
+    answer: str
+    status: str = Field(
+        description="'ok' when an LLM answer was produced; "
+        "'insufficient_evidence' when retrieval was empty/weak"
+    )
+    sources: list[AskSource]
+    documents: list[AskDocumentRef]

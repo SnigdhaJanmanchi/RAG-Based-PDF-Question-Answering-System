@@ -48,3 +48,24 @@ class PageExtractionError(AppError):
             status_code=400,
         )
         self.page_number = page_number
+
+
+class MissingOpenAIKeyError(AppError):
+    def __init__(
+        self,
+        message: str = (
+            "OPENAI_API_KEY is not configured. "
+            "Set it in the environment or .env to use POST /ask."
+        ),
+    ) -> None:
+        super().__init__(message, status_code=503)
+
+
+class OpenAIProviderError(AppError):
+    def __init__(self, message: str, *, status_code: int = 502) -> None:
+        super().__init__(message, status_code=status_code)
+
+
+class OpenAIRateLimitError(AppError):
+    def __init__(self, message: str = "OpenAI rate limit exceeded; try again later") -> None:
+        super().__init__(message, status_code=429)

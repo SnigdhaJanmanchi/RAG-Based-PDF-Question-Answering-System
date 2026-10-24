@@ -1,6 +1,10 @@
 """Pydantic request/response schemas."""
 
 from app.models.schemas import (
+    AskDocumentRef,
+    AskRequest,
+    AskResponse,
+    AskSource,
     DocumentInfo,
     DocumentListResponse,
     HealthResponse,
@@ -11,6 +15,10 @@ from app.models.schemas import (
 )
 
 __all__ = [
+    "AskDocumentRef",
+    "AskRequest",
+    "AskResponse",
+    "AskSource",
     "DocumentInfo",
     "DocumentListResponse",
     "HealthResponse",

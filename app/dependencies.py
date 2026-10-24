@@ -10,6 +10,7 @@ from fastapi import Depends, Request
 from app.config import Settings, get_settings
 from app.services.embeddings import EmbeddingService, get_embedding_service
 from app.services.ingest import IngestService
+from app.services.rag import RAGService
 from app.services.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -50,3 +51,10 @@ def get_ingest_service(
     store: Annotated[VectorStore, Depends(get_vector_store)],
 ) -> IngestService:
     return IngestService(settings=settings, embeddings=embeddings, store=store)
+
+
+def get_rag_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+    ingest: Annotated[IngestService, Depends(get_ingest_service)],
+) -> RAGService:
+    return RAGService(settings=settings, ingest=ingest)

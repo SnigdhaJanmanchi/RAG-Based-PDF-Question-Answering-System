@@ -49,8 +49,7 @@ def create_app() -> FastAPI:
         version=__version__,
         description=(
             "RAG-based PDF question answering API. "
-            "Phase 2: PDF upload, chunking, embeddings, and FAISS search "
-            "(no LLM answers yet)."
+            "Phase 3: upload → FAISS retrieve → grounded OpenAI answers via POST /ask."
         ),
         lifespan=lifespan,
     )

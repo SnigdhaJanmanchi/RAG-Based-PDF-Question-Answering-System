@@ -9,9 +9,13 @@ from fastapi import APIRouter, Depends, File, UploadFile
 
 from app import __version__
 from app.config import get_settings
-from app.dependencies import get_ingest_service, get_vector_store
+from app.dependencies import get_ingest_service, get_rag_service, get_vector_store
 from app.exceptions import AppError
 from app.models.schemas import (
+    AskDocumentRef,
+    AskRequest,
+    AskResponse,
+    AskSource,
     DocumentInfo,
     DocumentListResponse,
     HealthResponse,
@@ -21,6 +25,7 @@ from app.models.schemas import (
     UploadResponse,
 )
 from app.services.ingest import IngestService
+from app.services.rag import RAGService
 from app.services.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -149,5 +154,51 @@ def search(
                 filename=h.filename,
             )
             for h in hits
+        ],
+    )
+
+
+@router.post(
+    "/ask",
+    response_model=AskResponse,
+    tags=["ask"],
+    summary="Answer a question using retrieved PDF context (OpenAI)",
+)
+def ask(
+    body: AskRequest,
+    rag: Annotated[RAGService, Depends(get_rag_service)],
+) -> AskResponse:
+    """Grounded RAG answer. Does not use external knowledge beyond retrieved chunks."""
+    try:
+        result = rag.ask(
+            body.question,
+            document_id=body.document_id,
+            top_k=body.top_k,
+        )
+    except KeyError as exc:
+        raise AppError(str(exc), status_code=404) from exc
+    except ValueError as exc:
+        raise AppError(str(exc), status_code=400) from exc
+    except AppError:
+        raise
+
+    return AskResponse(
+        question=result.question,
+        answer=result.answer,
+        status=result.status,
+        sources=[
+            AskSource(
+                document_id=s.document_id,
+                filename=s.filename,
+                page=s.page,
+                chunk_id=s.chunk_id,
+                excerpt=s.excerpt,
+                score=s.score,
+            )
+            for s in result.sources
+        ],
+        documents=[
+            AskDocumentRef(document_id=d.document_id, filename=d.filename)
+            for d in result.documents
         ],
     )

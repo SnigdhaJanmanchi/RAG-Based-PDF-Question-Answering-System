@@ -2,9 +2,9 @@
 
 > **A Retrieval-Augmented Generation (RAG) application for asking natural-language questions over PDF documents.**
 
-**Status:** Phase 2 complete — PDF ingest, chunking, embeddings, and FAISS search are working via the API. LLM answer generation (`/ask`) and Streamlit are **not** implemented yet (Phase 3+).
+**Status:** Phase 3 complete — upload, FAISS search, and grounded OpenAI answers via `POST /ask` work locally. Streamlit UI and Docker deploy are **not** implemented (Phase 4+).
 
-AI PDF Assistant converts PDF documents into a searchable knowledge base: extract text, embed chunks, index them in FAISS, and retrieve relevant context. Grounded LLM answers arrive in Phase 3.
+AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, embed chunks, index them in FAISS, retrieve relevant context, and generate answers grounded only in that context.
 
 ---
 
@@ -12,25 +12,13 @@ AI PDF Assistant converts PDF documents into a searchable knowledge base: extrac
 
 | Area | Status |
 |------|--------|
-| Project layout (`app/`, config, logging) | Done (Phase 0–1) |
-| FastAPI `GET /health` + Swagger `/docs` | Done |
-| CORS for local Streamlit | Done |
-| Config via `.env` / pydantic-settings | Done |
-| PDF upload + PyMuPDF extraction | Done (Phase 2) |
-| Chunking, embeddings, FAISS persistence | Done (Phase 2) |
+| Project layout / config / health | Done (Phase 0–1) |
+| PDF upload, chunking, embeddings, FAISS | Done (Phase 2) |
 | `GET /documents`, `POST /search` | Done (Phase 2) |
-| Automated tests (parser, chunks, FAISS, API, E2E) | Done (Phase 2) |
-| RAG `/ask` + OpenAI | Planned (Phase 3) |
+| `POST /ask` grounded OpenAI answers | Done (Phase 3) |
+| Automated tests (mocked OpenAI + Phase 2 suite) | Done (Phase 3) |
 | Streamlit UI | Planned (Phase 4) |
 | Docker / deploy | Planned (Phase 6) |
-
----
-
-## Planned / target (later phases)
-
-- OpenAI-backed grounded answers (`POST /ask`)
-- Streamlit frontend
-- Docker / production deploy
 
 ---
 
@@ -43,7 +31,7 @@ AI PDF Assistant converts PDF documents into a searchable knowledge base: extrac
 | **Embeddings** | Sentence Transformers (`all-MiniLM-L6-v2` by default) |
 | **Vector DB** | FAISS (local, persisted) |
 | **Document processing** | PyMuPDF, LangChain Text Splitters |
-| **LLM** (planned) | OpenAI API |
+| **LLM** | OpenAI API (`gpt-4o-mini` by default) |
 | **Frontend** (planned) | Streamlit |
 
 ---
@@ -52,21 +40,15 @@ AI PDF Assistant converts PDF documents into a searchable knowledge base: extrac
 
 ```text
 app/
-  main.py                 # FastAPI app, CORS, error handlers
-  config.py               # Settings from environment
-  api/routes.py           # /health, /documents/upload, /documents, /search
-  models/schemas.py
+  main.py / config.py / api/routes.py
   services/
-    pdf_parser.py         # Validate + PyMuPDF extract
-    chunker.py            # Recursive chunking + metadata
-    embeddings.py         # Sentence Transformers (singleton)
-    vector_store.py       # FAISS + on-disk metadata
-    ingest.py             # Upload → index orchestration
-    rag.py                # Stub (Phase 3)
-frontend/                 # Streamlit UI (Phase 4)
-data/                     # Runtime uploads / indexes (gitignored)
+    pdf_parser.py, chunker.py, embeddings.py, vector_store.py, ingest.py
+    openai_client.py   # Official SDK wrapper (timeouts + retries)
+    rag.py             # Retrieve → grounded prompt → OpenAI
+frontend/              # Streamlit (Phase 4)
+data/                  # Runtime uploads / indexes (gitignored)
 tests/
-  fixtures/sample.pdf     # Tiny text PDF for E2E retrieval
+  fixtures/sample.pdf
 ```
 
 ---
@@ -83,81 +65,114 @@ python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
-cp .env.example .env        # optional; defaults work for Phase 2 (no OpenAI key needed)
+cp .env.example .env
+# Edit .env and set OPENAI_API_KEY for POST /ask (not required for upload/search)
 
 uvicorn app.main:app --reload --port 8000
 ```
 
-Then:
+Then open Swagger at http://localhost:8000/docs — upload a PDF, then call `/ask` or `/search`.
 
-- Health: http://localhost:8000/health
-- Swagger: http://localhost:8000/docs
-
-First embedding/search request downloads the Sentence Transformers model (one-time).
+First embedding request downloads the Sentence Transformers model (one-time).
 
 ### Run tests
 
 ```bash
-pytest                 # all tests (embedding/E2E marked slow; first run may download the model)
-pytest -m "not slow"   # skip model-backed tests
+pytest                    # full suite (OpenAI calls are mocked; no paid API required)
+pytest -m "not live"      # same — live tests skip without OPENAI_API_KEY
+pytest -m live            # optional live OpenAI E2E (only if OPENAI_API_KEY is set)
 ```
 
 ---
 
 ## Configuration
 
-See `.env.example`. Important Phase 2 variables:
+See `.env.example`. Never commit `.env`, uploads, or FAISS indexes.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Local embedding model |
+| `OPENAI_API_KEY` | empty | Required for `POST /ask` |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Cost-effective chat model |
+| `OPENAI_TIMEOUT_SECONDS` | `30` | Per-request timeout |
+| `OPENAI_MAX_RETRIES` | `2` | SDK retries for transient failures |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local embeddings |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `200` | Recursive splitter |
-| `TOP_K` | `5` | Default search result count |
+| `TOP_K` | `5` | Default retrieval count |
+| `SIMILARITY_THRESHOLD` | `0.25` | Min cosine score to keep a chunk |
+| `CONTEXT_TOKEN_BUDGET` | `2500` | Approx token budget for context |
 | `DATA_DIR` | `data` | Uploads + FAISS + metadata |
-| `MAX_UPLOAD_BYTES` | `10485760` (10 MiB) | Upload size limit |
-| `CORS_ORIGINS` | Streamlit localhost | Browser CORS |
-| `OPENAI_API_KEY` | empty | Unused until Phase 3 |
-
-Never commit `.env`, uploads, or FAISS indexes (`data/` is gitignored).
+| `MAX_UPLOAD_BYTES` | `10485760` | Upload size limit (10 MiB) |
 
 ---
 
-## API (Phase 2)
+## API
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/health` | Liveness |
-| `POST` | `/documents/upload` | Upload PDF → parse → chunk → embed → FAISS |
-| `POST` | `/upload` | Alias for `/documents/upload` |
+| `POST` | `/documents/upload` | Upload PDF → index |
+| `POST` | `/upload` | Alias for upload |
 | `GET` | `/documents` | List indexed documents |
-| `POST` | `/search` | Semantic search; returns chunk text + metadata (no LLM) |
+| `POST` | `/search` | Semantic search (no LLM) |
+| `POST` | `/ask` | Grounded RAG answer (OpenAI) |
 
-### Upload response
+### Sample `POST /ask` request
 
 ```json
 {
-  "document_id": "<uuid>",
-  "filename": "report.pdf",
-  "page_count": 2,
-  "chunk_count": 5,
-  "duplicate": false
+  "question": "Where does the indigo phoenix nest?",
+  "document_id": null,
+  "top_k": 5
 }
 ```
 
-Identical file content (SHA-256) returns the existing document with `"duplicate": true` and does not double-index.
+`document_id` is optional — omit it to search all indexed documents.
 
-### Search request
+### Sample `POST /ask` response (`status: ok`)
 
 ```json
-{ "query": "Where does the indigo phoenix nest?", "top_k": 3, "document_id": null }
+{
+  "question": "Where does the indigo phoenix nest?",
+  "answer": "According to the document, the indigo phoenix nests at Lake Azure.",
+  "status": "ok",
+  "sources": [
+    {
+      "document_id": "<uuid>",
+      "filename": "sample.pdf",
+      "page": 1,
+      "chunk_id": "<uuid>:p1:c0",
+      "excerpt": "The indigo phoenix nests at Lake Azure in the year 1842.",
+      "score": 0.81
+    }
+  ],
+  "documents": [
+    { "document_id": "<uuid>", "filename": "sample.pdf" }
+  ]
+}
 ```
+
+### Insufficient evidence
+
+When no chunks pass the similarity threshold (or the index is empty), the API returns HTTP 200 with:
+
+```json
+{
+  "status": "insufficient_evidence",
+  "answer": "I could not find enough relevant information in the indexed PDF content to answer that question.",
+  "sources": [],
+  "documents": []
+}
+```
+
+No OpenAI call is made in that case. Missing `OPENAI_API_KEY` when evidence exists returns **503**.
 
 ---
 
-## Limitations (current)
+## Limitations (honest)
 
-- **No OCR** — image-only / scanned PDFs return a clear 422; text-based PDFs only
-- **No LLM answers** — use `/search` for retrieved chunks; `/ask` is Phase 3
-- **Encrypted PDFs** are rejected
-- **Single-node local FAISS** — not a multi-user managed vector DB
-- Failed page extraction aborts the upload (pages are never silently skipped)
+- **Prompts reduce but do not eliminate hallucinations.** The model is instructed to use only retrieved excerpts; always verify answers against cited pages.
+- **No OCR** — scanned/image-only PDFs return 422.
+- **Encrypted PDFs** are rejected.
+- **PDF text is treated as untrusted data** (prompt-injection resistant design), but a determined adversarial PDF can still confuse the model.
+- **Single-node local FAISS** — not multi-tenant or managed vector DB.
+- Streamlit UI and Docker packaging are not included yet.
