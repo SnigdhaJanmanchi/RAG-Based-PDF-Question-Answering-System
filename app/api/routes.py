@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -49,6 +50,7 @@ async def _read_and_ingest(
     file: UploadFile,
     ingest: IngestService,
 ) -> UploadResponse:
+    started = time.perf_counter()
     data = await file.read()
     try:
         result = ingest.ingest_pdf(
@@ -57,9 +59,28 @@ async def _read_and_ingest(
             content_type=file.content_type,
         )
     except AppError:
+        logger.info(
+            "upload_failed status=error bytes=%s elapsed_ms=%.1f",
+            len(data),
+            (time.perf_counter() - started) * 1000,
+        )
         raise
     except ValueError as exc:
+        logger.info(
+            "upload_failed status=400 bytes=%s elapsed_ms=%.1f",
+            len(data),
+            (time.perf_counter() - started) * 1000,
+        )
         raise AppError(str(exc), status_code=400) from exc
+
+    logger.info(
+        "upload_ok duplicate=%s pages=%s chunks=%s bytes=%s elapsed_ms=%.1f",
+        result.duplicate,
+        result.page_count,
+        result.chunk_count,
+        len(data),
+        (time.perf_counter() - started) * 1000,
+    )
     return UploadResponse(
         document_id=result.document_id,
         filename=result.filename,
@@ -130,6 +151,7 @@ def search(
     ingest: Annotated[IngestService, Depends(get_ingest_service)],
 ) -> SearchResponse:
     """Retrieve top-k chunks for a query. Does not call an LLM."""
+    started = time.perf_counter()
     try:
         hits = ingest.search(
             body.query,
@@ -141,6 +163,11 @@ def search(
     except ValueError as exc:
         raise AppError(str(exc), status_code=400) from exc
 
+    logger.info(
+        "search_ok hits=%s elapsed_ms=%.1f",
+        len(hits),
+        (time.perf_counter() - started) * 1000,
+    )
     return SearchResponse(
         query=body.query,
         results=[
@@ -169,6 +196,7 @@ def ask(
     rag: Annotated[RAGService, Depends(get_rag_service)],
 ) -> AskResponse:
     """Grounded RAG answer. Does not use external knowledge beyond retrieved chunks."""
+    started = time.perf_counter()
     try:
         result = rag.ask(
             body.question,
@@ -180,8 +208,18 @@ def ask(
     except ValueError as exc:
         raise AppError(str(exc), status_code=400) from exc
     except AppError:
+        logger.info(
+            "ask_failed elapsed_ms=%.1f",
+            (time.perf_counter() - started) * 1000,
+        )
         raise
 
+    logger.info(
+        "ask_ok status=%s sources=%s elapsed_ms=%.1f",
+        result.status,
+        len(result.sources),
+        (time.perf_counter() - started) * 1000,
+    )
     return AskResponse(
         question=result.question,
         answer=result.answer,

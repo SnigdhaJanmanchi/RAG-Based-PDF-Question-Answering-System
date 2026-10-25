@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 from app.config import Settings
 from app.services.chunker import TextChunk, chunk_pages
@@ -14,6 +16,20 @@ from app.services.pdf_parser import extract_pages, validate_pdf_upload
 from app.services.vector_store import DocumentRecord, SearchHit, VectorStore
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_filename(filename: str | None, *, fallback: str = "upload.pdf") -> str:
+    """Return a basename-only PDF filename (blocks path traversal)."""
+    raw = (filename or "").strip() or fallback
+    name = Path(raw).name  # drop any directory components
+    name = re.sub(r"[^\w.\- ()\[\]]+", "_", name)
+    if not name.lower().endswith(".pdf"):
+        name = f"{name}.pdf" if name else fallback
+    # Prevent empty / dot-only names
+    stem = Path(name).stem.strip(" .")
+    if not stem:
+        name = fallback
+    return name[:180]
 
 
 @dataclass(frozen=True)
@@ -70,7 +86,7 @@ class IngestService:
 
         parsed = extract_pages(data)
         doc_id = str(uuid.uuid4())
-        safe_name = filename or f"{doc_id}.pdf"
+        safe_name = sanitize_filename(filename, fallback=f"{doc_id}.pdf")
 
         chunks: list[TextChunk] = chunk_pages(
             parsed.pages,

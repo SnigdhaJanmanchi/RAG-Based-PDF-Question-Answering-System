@@ -201,7 +201,11 @@ class RAGService:
         hits = select_within_budget(hits, self.settings.context_token_budget)
 
         if not hits:
-            logger.info("Insufficient retrieval evidence for question=%r", q[:80])
+            logger.info(
+                "Insufficient retrieval evidence (question_chars=%s, top_k=%s)",
+                len(q),
+                k,
+            )
             return AskResult(
                 question=q,
                 answer=INSUFFICIENT_ANSWER,

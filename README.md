@@ -2,7 +2,7 @@
 
 > **A Retrieval-Augmented Generation (RAG) application for asking natural-language questions over PDF documents.**
 
-**Status:** Phase 4 complete — FastAPI RAG backend + Streamlit UI. Docker/deploy is **not** included (Phase 6).
+**Status:** Phase 5 complete — local RAG MVP + Streamlit + hardening/validation. Docker/deploy is **not** included (Phase 6). See [`docs/PHASE5_VALIDATION_REPORT.md`](docs/PHASE5_VALIDATION_REPORT.md). **Not production-certified.**
 
 AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, embed chunks, index them in FAISS, retrieve relevant context, and generate answers grounded only in that context. Use Swagger or the Streamlit chat UI.
 
@@ -17,6 +17,7 @@ AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, e
 | `GET /documents`, `POST /search` | Done (Phase 2) |
 | `POST /ask` grounded OpenAI answers | Done (Phase 3) |
 | Streamlit UI (upload, select, chat + citations) | Done (Phase 4) |
+| Hardening, retrieval eval, validation report | Done (Phase 5) |
 | Docker / deploy | Planned (Phase 6) |
 
 ---
@@ -88,10 +89,14 @@ First embedding/upload downloads the Sentence Transformers model (one-time).
 ### Run tests
 
 ```bash
-pytest                    # backend + frontend (OpenAI mocked; no paid API required)
-pytest -m "not live"      # skip optional live OpenAI E2E
-pytest -m live            # only if OPENAI_API_KEY is set
+pytest -m "not live"      # full automated suite (OpenAI mocked; no paid API required)
+pytest -m live            # optional live OpenAI E2E (only if OPENAI_API_KEY is set)
+python scripts/eval_retrieval.py --k 3   # offline Hit@K / Recall@K on fixture PDFs
 ```
+
+First embedding/model download pulls Sentence Transformers + PyTorch wheels (hundreds of MB). Subsequent runs use the local cache.
+
+Phase 5 validation details: [`docs/PHASE5_VALIDATION_REPORT.md`](docs/PHASE5_VALIDATION_REPORT.md).
 
 ---
 
@@ -166,3 +171,5 @@ Response includes `answer`, `status` (`ok` | `insufficient_evidence`), `sources`
 - **No OCR**, encrypted PDFs rejected, local FAISS only.
 - No document delete API / UI yet.
 - Docker packaging is not included yet.
+- Live OpenAI ask and interactive browser QA may still be unverified in a given environment — check the Phase 5 report.
+- This project is **not** claimed production-ready without deploy/auth/load verification (Phase 6+).
