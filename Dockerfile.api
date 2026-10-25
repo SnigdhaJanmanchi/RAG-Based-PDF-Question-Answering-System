@@ -1,0 +1,56 @@
+# FastAPI backend — Python 3.12 slim, non-root
+FROM python:3.12-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DATA_DIR=/app/data \
+    # Baked into the image (do not mount a volume over this path)
+    HF_HOME=/app/model_cache \
+    TRANSFORMERS_CACHE=/app/model_cache \
+    SENTENCE_TRANSFORMERS_HOME=/app/model_cache
+
+WORKDIR /app
+
+# Minimal OS deps for scientific wheels / SSL
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 appgroup \
+    && useradd --uid 10001 --gid appgroup --create-home --shell /usr/sbin/nologin appuser
+
+# Dependency layer (cached unless requirements-api.txt changes)
+COPY requirements-api.txt .
+RUN pip install --upgrade pip \
+    && pip install -r requirements-api.txt
+
+# Pre-download embedding weights at build time (avoids runtime HF egress).
+# Override EMBEDDING_MODEL at runtime only if the weights are already cached.
+ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+# Download while build network is available (offline flags must be off here)
+RUN HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
+    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
+
+# Application code only
+COPY app ./app
+COPY data/.gitkeep ./data/.gitkeep
+
+RUN mkdir -p /app/data /app/model_cache \
+    && chown -R appuser:appgroup /app
+
+# Prefer baked weights at runtime (Compose can override to 0 to refresh models)
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
+
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+
+# Bind all interfaces for container networking; keys come from env at runtime
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -2,7 +2,7 @@
 
 > **A Retrieval-Augmented Generation (RAG) application for asking natural-language questions over PDF documents.**
 
-**Status:** Phase 5 complete — local RAG MVP + Streamlit + hardening/validation. Docker/deploy is **not** included (Phase 6). See [`docs/PHASE5_VALIDATION_REPORT.md`](docs/PHASE5_VALIDATION_REPORT.md). **Not production-certified.**
+**Status:** Phase 6 complete — local Docker Compose packaging + CI. **No auth; not for public sensitive docs. Not auto-deployed.** See [`docs/PHASE6_DEPLOYMENT_REPORT.md`](docs/PHASE6_DEPLOYMENT_REPORT.md) and [`docs/PHASE5_VALIDATION_REPORT.md`](docs/PHASE5_VALIDATION_REPORT.md).
 
 AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, embed chunks, index them in FAISS, retrieve relevant context, and generate answers grounded only in that context. Use Swagger or the Streamlit chat UI.
 
@@ -18,7 +18,7 @@ AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, e
 | `POST /ask` grounded OpenAI answers | Done (Phase 3) |
 | Streamlit UI (upload, select, chat + citations) | Done (Phase 4) |
 | Hardening, retrieval eval, validation report | Done (Phase 5) |
-| Docker / deploy | Planned (Phase 6) |
+| Docker Compose + GitHub Actions CI | Done (Phase 6) |
 
 ---
 
@@ -40,11 +40,13 @@ AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, e
 
 ```text
 app/                      # FastAPI backend
-frontend/
-  api_client.py           # HTTP client for real API contracts
-  ui_helpers.py           # Pure UI helpers
-  streamlit_app.py        # Streamlit chat UI
+frontend/                 # Streamlit UI
+Dockerfile.api / Dockerfile.ui
+docker-compose.yml
+.github/workflows/ci.yml  # tests + image builds (no deploy)
 data/                     # Runtime uploads / indexes (gitignored)
+docs/PHASE5_VALIDATION_REPORT.md
+docs/PHASE6_DEPLOYMENT_REPORT.md
 tests/
 ```
 
@@ -100,6 +102,35 @@ Phase 5 validation details: [`docs/PHASE5_VALIDATION_REPORT.md`](docs/PHASE5_VAL
 
 ---
 
+## Docker Compose (recommended local demo)
+
+**Warning:** There is **no authentication**. Do not put sensitive PDFs on a public host.
+
+```bash
+cp .env.example .env
+# Set OPENAI_API_KEY for /ask (optional for upload/search only)
+
+docker compose build
+docker compose up -d
+```
+
+- API health: http://localhost:8000/health  
+- Swagger: http://localhost:8000/docs  
+- Streamlit: http://localhost:8501  
+
+Uploads + FAISS indexes persist in the Docker volume `app_data`. The API image bakes the MiniLM embedding model (~first compose build is large; API image ≈ 10 GB because of PyTorch).
+
+```bash
+docker compose logs -f api
+docker compose down          # keeps volume
+```
+
+CI (`.github/workflows/ci.yml`) runs `pytest -m "not live"` and builds both images on PRs/`main` — **it does not deploy**.
+
+Portfolio hosting options, resource notes, and troubleshooting: [`docs/PHASE6_DEPLOYMENT_REPORT.md`](docs/PHASE6_DEPLOYMENT_REPORT.md).
+
+---
+
 ## Configuration
 
 See `.env.example`. Never commit `.env`, uploads, or FAISS indexes.
@@ -117,8 +148,9 @@ See `.env.example`. Never commit `.env`, uploads, or FAISS indexes.
 | `CONTEXT_TOKEN_BUDGET` | `2500` | Approx context budget |
 | `DATA_DIR` | `data` | Uploads + FAISS + metadata |
 | `MAX_UPLOAD_BYTES` | `10485760` | Upload size limit |
-| `API_BASE_URL` | `http://localhost:8000` | Streamlit → FastAPI base URL |
-| `CORS_ORIGINS` | Streamlit localhost | Browser CORS for future use |
+| `API_BASE_URL` | `http://localhost:8000` | Streamlit → FastAPI (Compose: `http://api:8000`) |
+| `CORS_ORIGINS` | Streamlit localhost | Browser→API CORS (Swagger); tighten for any public UI URL |
+| `HF_HUB_OFFLINE` | `1` (Compose) | Use baked embedding weights; set `0` only to refresh from Hugging Face |
 
 The Streamlit app never reads or displays `OPENAI_API_KEY` — only the API server does.
 
@@ -170,6 +202,7 @@ Response includes `answer`, `status` (`ok` | `insufficient_evidence`), `sources`
 - Prompts reduce but do not eliminate hallucinations.
 - **No OCR**, encrypted PDFs rejected, local FAISS only.
 - No document delete API / UI yet.
-- Docker packaging is not included yet.
-- Live OpenAI ask and interactive browser QA may still be unverified in a given environment — check the Phase 5 report.
-- This project is **not** claimed production-ready without deploy/auth/load verification (Phase 6+).
+- **No authentication** — do not expose publicly with sensitive documents.
+- API Docker image is large (~10 GB) due to the PyTorch stack.
+- Live OpenAI ask and interactive browser QA may still be unverified — check Phase 5/6 reports.
+- CI builds images but **does not** auto-deploy to any cloud.
