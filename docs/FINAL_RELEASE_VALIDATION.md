@@ -12,7 +12,7 @@
 |------|--------|
 | Automated tests (`pytest -m "not live"`) | **77 passed**, 1 deselected (local) |
 | CI Tests (Python 3.12) after gitignore fix | **SUCCESS** (run after push `12f8efe`) |
-| CI Docker image builds | Re-triggered after CPU-torch Dockerfile change; see Actions on PR #1 |
+| CI Docker image builds | **SUCCESS** on commit `20bcc03` (CPU-torch Dockerfile; all 2 checks green) |
 | API image size | **10.2 GB → 2.64 GB** (CPU-only PyTorch; same MiniLM) |
 | Embedding model / dims unchanged | **`all-MiniLM-L6-v2`, dim 384** verified in image |
 | Compose health / upload / search / restart persistence | **Verified** |
@@ -101,7 +101,6 @@ curl -fsS http://localhost:8000/health
 
 ## 7. Remaining follow-ups (for humans)
 
-1. Confirm GitHub Actions **Docker image builds** job is green on the CPU-torch commit.
-2. Optionally run `pytest -m live` and a Compose `/ask` with a real key (do not commit the key).
-3. Explicit approval required before marking the draft PR ready or merging.
-4. Any public host needs auth, TLS, and a threat model — not provided here.
+1. Optionally run `pytest -m live` and a Compose `/ask` with a real key (do not commit the key).
+2. Explicit approval required before marking the draft PR ready or merging.
+3. Any public host needs auth, TLS, and a threat model — not provided here.
