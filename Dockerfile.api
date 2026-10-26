@@ -24,7 +24,10 @@ RUN apt-get update \
 
 # Dependency layer (cached unless requirements-api.txt changes)
 COPY requirements-api.txt .
+# Install CPU-only PyTorch first so sentence-transformers does not pull
+# multi-GB CUDA wheels from default PyPI (same MiniLM embeddings at runtime).
 RUN pip install --upgrade pip \
+    && pip install --index-url https://download.pytorch.org/whl/cpu torch \
     && pip install -r requirements-api.txt
 
 # Pre-download embedding weights at build time (avoids runtime HF egress).

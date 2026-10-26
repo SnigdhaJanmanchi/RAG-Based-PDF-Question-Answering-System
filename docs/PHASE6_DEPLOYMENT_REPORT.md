@@ -45,9 +45,10 @@ Phase 6 packaging is implemented and validated locally where Docker was availabl
 
 **Resources / model loading**
 
-- API image ≈ **10.2 GB** (PyTorch + CUDA wheel deps + MiniLM). UI ≈ **834 MB**.
+- API image ≈ **2.64 GB** after CPU-only PyTorch install (was **10.2 GB** with default CUDA wheels). UI ≈ **833 MB**. Same baked MiniLM (`all-MiniLM-L6-v2`, dim 384).
 - First request loads MiniLM from the image cache (seconds). Soft Compose limits: API 4 GB / 2 CPU; UI 1 GB / 0.5 CPU.
 - Set `HF_HUB_OFFLINE=0` only if you intentionally download/refresh models and the host has egress.
+- See [`FINAL_RELEASE_VALIDATION.md`](FINAL_RELEASE_VALIDATION.md) for the release-readiness size check and CI fix.
 
 ---
 
@@ -74,7 +75,7 @@ Phase 6 packaging is implemented and validated locally where Docker was availabl
 | Live OpenAI `/ask` in Compose | No `OPENAI_API_KEY` |
 | Interactive browser UI session | Not performed |
 | Cloud deploy (Railway/Render/Fly/etc.) | Explicitly out of scope |
-| CI workflow on GitHub Actions runners | Defined in repo; execution depends on GitHub after push |
+| CI workflow on GitHub Actions runners | Tests fixed (repo-relative `.gitignore`); see final validation report |
 
 ---
 
@@ -111,7 +112,7 @@ Examples only — **do not auto-deploy from this agent**:
 | Railway / Render / Fly.io | Map two services + volume; set secrets in the dashboard |
 | Streamlit Community Cloud | UI only; point `API_BASE_URL` at a separately hosted API |
 
-**Cost drivers:** API RAM/disk (10 GB image + model), OpenAI token usage, idle always-on hosts.
+**Cost drivers:** API RAM/disk (~2.6 GB image + model), OpenAI token usage, idle always-on hosts.
 
 ---
 
@@ -130,7 +131,7 @@ Examples only — **do not auto-deploy from this agent**:
 ## 7. Remaining limitations
 
 - **No auth / multi-tenant isolation** — unsuitable for public sensitive docs.
-- Large API image (torch stack); CPU-only torch index not applied yet.
+- API image still multi-GB (CPU torch + MiniLM); optimized vs CUDA wheels but not tiny.
 - Live OpenAI + browser QA still environment-dependent.
 - CI does not deploy; staging URL was **not** created by this work.
 - Exit criterion “staging URL answers questions” from the original plan is **not met** (no cloud staging) — local Compose validation substitutes for packaging readiness.

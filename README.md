@@ -2,7 +2,7 @@
 
 > **A Retrieval-Augmented Generation (RAG) application for asking natural-language questions over PDF documents.**
 
-**Status:** Phase 6 complete — local Docker Compose packaging + CI. **No auth; not for public sensitive docs. Not auto-deployed.** See [`docs/PHASE6_DEPLOYMENT_REPORT.md`](docs/PHASE6_DEPLOYMENT_REPORT.md) and [`docs/PHASE5_VALIDATION_REPORT.md`](docs/PHASE5_VALIDATION_REPORT.md).
+**Status:** Phase 6 complete — local Docker Compose packaging + CI. Release validation: CPU-torch API image (~2.64 GB) + CI fix. **No auth; not for public sensitive docs. Not auto-deployed.** See [`docs/FINAL_RELEASE_VALIDATION.md`](docs/FINAL_RELEASE_VALIDATION.md), [`docs/PHASE6_DEPLOYMENT_REPORT.md`](docs/PHASE6_DEPLOYMENT_REPORT.md), and [`docs/PHASE5_VALIDATION_REPORT.md`](docs/PHASE5_VALIDATION_REPORT.md).
 
 AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, embed chunks, index them in FAISS, retrieve relevant context, and generate answers grounded only in that context. Use Swagger or the Streamlit chat UI.
 
@@ -47,6 +47,7 @@ docker-compose.yml
 data/                     # Runtime uploads / indexes (gitignored)
 docs/PHASE5_VALIDATION_REPORT.md
 docs/PHASE6_DEPLOYMENT_REPORT.md
+docs/FINAL_RELEASE_VALIDATION.md
 tests/
 ```
 
@@ -118,7 +119,7 @@ docker compose up -d
 - Swagger: http://localhost:8000/docs  
 - Streamlit: http://localhost:8501  
 
-Uploads + FAISS indexes persist in the Docker volume `app_data`. The API image bakes the MiniLM embedding model (~first compose build is large; API image ≈ 10 GB because of PyTorch).
+Uploads + FAISS indexes persist in the Docker volume `app_data`. The API image bakes the MiniLM embedding model and installs **CPU-only** PyTorch (API image ≈ **2.6 GB**; first compose build still downloads wheels + model once).
 
 ```bash
 docker compose logs -f api
@@ -203,6 +204,6 @@ Response includes `answer`, `status` (`ok` | `insufficient_evidence`), `sources`
 - **No OCR**, encrypted PDFs rejected, local FAISS only.
 - No document delete API / UI yet.
 - **No authentication** — do not expose publicly with sensitive documents.
-- API Docker image is large (~10 GB) due to the PyTorch stack.
-- Live OpenAI ask and interactive browser QA may still be unverified — check Phase 5/6 reports.
+- API Docker image is still multi-GB (~2.6 GB with CPU PyTorch + MiniLM).
+- Live OpenAI ask and interactive browser QA may still be unverified — check Phase 5/6 and final validation reports.
 - CI builds images but **does not** auto-deploy to any cloud.

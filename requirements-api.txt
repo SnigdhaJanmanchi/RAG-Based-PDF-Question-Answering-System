@@ -1,4 +1,6 @@
 # Production API image (Python 3.12). No Streamlit / pytest.
+# PyTorch: Dockerfile.api installs the CPU wheel from download.pytorch.org
+# before this file so default PyPI does not pull CUDA builds.
 fastapi>=0.115.0,<1.0.0
 uvicorn[standard]>=0.32.0,<1.0.0
 pydantic-settings>=2.6.0,<3.0.0
