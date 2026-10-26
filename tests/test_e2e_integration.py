@@ -237,6 +237,8 @@ def test_ask_citations_match_retrieved_sources(
 
 
 def test_gitignore_excludes_secrets_and_runtime_data() -> None:
-    gitignore = Path("/workspace/.gitignore").read_text(encoding="utf-8")
+    # Resolve relative to repo root so CI runners (not only /workspace) work.
+    root = Path(__file__).resolve().parents[1]
+    gitignore = (root / ".gitignore").read_text(encoding="utf-8")
     assert ".env" in gitignore
     assert "data/" in gitignore or "data/*" in gitignore
