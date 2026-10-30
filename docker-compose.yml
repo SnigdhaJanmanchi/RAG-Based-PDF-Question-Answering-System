@@ -1,5 +1,7 @@
 # Local / portfolio Docker Compose stack.
-# Secrets: copy .env.example → .env and set OPENAI_API_KEY. Never commit .env.
+# Secrets: copy .env.example → .env. Never commit .env.
+# Default LLM_PROVIDER=ollama (host Ollama on localhost). For OpenAI set
+# LLM_PROVIDER=openai and OPENAI_API_KEY. Do not expose Ollama publicly.
 # Do not publish this stack to the public internet with sensitive PDFs (no auth).
 
 services:
@@ -14,11 +16,19 @@ services:
       APP_NAME: ${APP_NAME:-AI PDF Assistant}
       APP_ENV: ${APP_ENV:-production}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Provider switch (env only). Ollama needs host network access to 127.0.0.1:11434
+      # or extra_hosts — prefer host-network / host Ollama for local demos.
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       # Keys must come from host .env / environment — never baked into the image
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-30}
       OPENAI_MAX_RETRIES: ${OPENAI_MAX_RETRIES:-2}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:0.6b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-60}
+      OLLAMA_MAX_RETRIES: ${OLLAMA_MAX_RETRIES:-2}
+      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-512}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
       CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}

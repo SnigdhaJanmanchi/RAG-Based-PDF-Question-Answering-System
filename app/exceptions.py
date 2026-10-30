@@ -50,12 +50,23 @@ class PageExtractionError(AppError):
         self.page_number = page_number
 
 
+class InvalidLLMProviderError(AppError):
+    def __init__(self, provider: str) -> None:
+        super().__init__(
+            f"Invalid LLM_PROVIDER={provider!r}. "
+            "Use 'ollama' or 'openai' (env switch only; no silent fallback).",
+            status_code=503,
+        )
+
+
 class MissingOpenAIKeyError(AppError):
     def __init__(
         self,
         message: str = (
             "OPENAI_API_KEY is not configured. "
-            "Set it in the environment or .env to use POST /ask."
+            "Set LLM_PROVIDER=openai and provide OPENAI_API_KEY in the "
+            "environment or .env to use POST /ask with OpenAI. "
+            "For local free generation set LLM_PROVIDER=ollama instead."
         ),
     ) -> None:
         super().__init__(message, status_code=503)
@@ -69,3 +80,40 @@ class OpenAIProviderError(AppError):
 class OpenAIRateLimitError(AppError):
     def __init__(self, message: str = "OpenAI rate limit exceeded; try again later") -> None:
         super().__init__(message, status_code=429)
+
+
+class OllamaProviderError(AppError):
+    """Generic Ollama failure (no fallback to OpenAI)."""
+
+    def __init__(self, message: str, *, status_code: int = 502) -> None:
+        super().__init__(message, status_code=status_code)
+
+
+class OllamaConnectionError(OllamaProviderError):
+    def __init__(
+        self,
+        message: str = (
+            "Could not reach local Ollama. Start `ollama serve` on localhost. "
+            "No OpenAI fallback will be used."
+        ),
+    ) -> None:
+        super().__init__(message, status_code=503)
+
+
+class OllamaTimeoutError(OllamaProviderError):
+    def __init__(
+        self,
+        message: str = "Ollama request timed out",
+    ) -> None:
+        super().__init__(message, status_code=504)
+
+
+class OllamaModelMissingError(OllamaProviderError):
+    def __init__(
+        self,
+        message: str = (
+            "Configured Ollama model is not available locally. "
+            "Pull it with `ollama pull <model>`. No OpenAI fallback."
+        ),
+    ) -> None:
+        super().__init__(message, status_code=503)

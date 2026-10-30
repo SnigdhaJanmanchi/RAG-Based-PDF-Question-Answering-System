@@ -110,6 +110,7 @@ class FakeIngest:
 
 def _settings(**overrides: Any) -> Settings:
     base = {
+        "llm_provider": "openai",
         "openai_api_key": "sk-test",
         "openai_model": "gpt-4o-mini",
         "similarity_threshold": 0.2,
@@ -117,6 +118,8 @@ def _settings(**overrides: Any) -> Settings:
         "context_token_budget": 2000,
         "openai_timeout_seconds": 5.0,
         "openai_max_retries": 1,
+        "ollama_base_url": "http://127.0.0.1:11434",
+        "ollama_model": "qwen3:0.6b",
     }
     base.update(overrides)
     return Settings(**base)
@@ -159,13 +162,18 @@ def test_ask_valid_question_uses_context_in_prompt(monkeypatch: pytest.MonkeyPat
     ]
     captured: dict[str, Any] = {}
 
-    def fake_chat(client: Any, *, model: str, messages: list, temperature: float = 0.0) -> str:
-        captured["model"] = model
-        captured["messages"] = messages
-        return "It nests at Lake Azure (sample.pdf, page 1)."
+    class FakeProvider:
+        name = "openai"
 
-    monkeypatch.setattr("app.services.rag.chat_completion", fake_chat)
-    monkeypatch.setattr("app.services.rag.build_openai_client", lambda **kw: object())
+        def complete(self, messages: list, *, temperature: float = 0.0) -> str:
+            captured["messages"] = messages
+            captured["temperature"] = temperature
+            return "It nests at Lake Azure (sample.pdf, page 1)."
+
+    monkeypatch.setattr(
+        "app.services.rag.build_llm_provider",
+        lambda settings, **kw: FakeProvider(),
+    )
 
     rag = RAGService(_settings(), FakeIngest(hits=hits))  # type: ignore[arg-type]
     result = rag.ask("Where does the indigo phoenix nest?")
@@ -176,7 +184,6 @@ def test_ask_valid_question_uses_context_in_prompt(monkeypatch: pytest.MonkeyPat
     assert result.documents[0].document_id == "d1"
     assert "Lake Azure" in captured["messages"][1]["content"]
     assert captured["messages"][0]["content"] == SYSTEM_PROMPT
-    assert captured["model"] == "gpt-4o-mini"
 
 
 def test_ask_doc_specific_and_invalid_id() -> None:
@@ -195,11 +202,16 @@ def test_ask_doc_specific_and_invalid_id() -> None:
 
 
 def test_ask_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    def boom(*_a: Any, **_k: Any) -> str:
-        raise OpenAIProviderError("boom")
+    class BoomProvider:
+        name = "openai"
 
-    monkeypatch.setattr("app.services.rag.chat_completion", boom)
-    monkeypatch.setattr("app.services.rag.build_openai_client", lambda **kw: object())
+        def complete(self, messages: list, *, temperature: float = 0.0) -> str:
+            raise OpenAIProviderError("boom")
+
+    monkeypatch.setattr(
+        "app.services.rag.build_llm_provider",
+        lambda settings, **kw: BoomProvider(),
+    )
     rag = RAGService(
         _settings(),
         FakeIngest(hits=[_hit("context", score=0.9)]),  # type: ignore[arg-type]
@@ -209,14 +221,20 @@ def test_ask_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_ask_injected_openai_client_skips_key_check(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Injected client is used for tests without requiring a real key."""
+    """Injected OpenAI SDK client is used without requiring a real key."""
     mock_client = MagicMock()
+    captured: dict[str, Any] = {}
 
     def fake_chat(client: Any, *, model: str, messages: list, temperature: float = 0.0) -> str:
         assert client is mock_client
+        captured["messages"] = messages
         return "Grounded answer."
 
-    monkeypatch.setattr("app.services.rag.chat_completion", fake_chat)
+    monkeypatch.setattr("app.services.openai_client.chat_completion", fake_chat)
+    monkeypatch.setattr(
+        "app.services.llm.openai_provider.chat_completion",
+        fake_chat,
+    )
     rag = RAGService(
         _settings(openai_api_key=""),
         FakeIngest(hits=[_hit("fact", score=0.95)]),  # type: ignore[arg-type]
@@ -224,3 +242,45 @@ def test_ask_injected_openai_client_skips_key_check(monkeypatch: pytest.MonkeyPa
     result = rag.ask("What?", openai_client=mock_client)
     assert result.status == STATUS_OK
     assert result.answer == "Grounded answer."
+    assert captured["messages"][0]["content"] == SYSTEM_PROMPT
+
+
+def test_ask_with_injected_llm_provider() -> None:
+    class FakeProvider:
+        name = "ollama"
+
+        def complete(self, messages: list, *, temperature: float = 0.0) -> str:
+            assert messages[0]["role"] == "system"
+            return "Answer from injected provider."
+
+    rag = RAGService(
+        _settings(llm_provider="ollama", openai_api_key=""),
+        FakeIngest(hits=[_hit("fact", score=0.95)]),  # type: ignore[arg-type]
+    )
+    result = rag.ask("What?", llm_provider=FakeProvider())
+    assert result.status == STATUS_OK
+    assert result.answer == "Answer from injected provider."
+
+
+def test_ask_ollama_without_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ollama path must not require OPENAI_API_KEY."""
+
+    class FakeOllama:
+        name = "ollama"
+
+        def complete(self, messages: list, *, temperature: float = 0.0) -> str:
+            return "Local ollama answer."
+
+    def fake_build(settings: Settings, **kw: Any) -> FakeOllama:
+        assert settings.llm_provider == "ollama"
+        assert not (settings.openai_api_key or "").strip()
+        return FakeOllama()
+
+    monkeypatch.setattr("app.services.rag.build_llm_provider", fake_build)
+    rag = RAGService(
+        _settings(llm_provider="ollama", openai_api_key=""),
+        FakeIngest(hits=[_hit("indigo phoenix at Lake Azure", score=0.9)]),  # type: ignore[arg-type]
+    )
+    result = rag.ask("Where does the phoenix nest?")
+    assert result.status == STATUS_OK
+    assert "ollama" in result.answer.lower() or "Local" in result.answer

@@ -189,13 +189,13 @@ def search(
     "/ask",
     response_model=AskResponse,
     tags=["ask"],
-    summary="Answer a question using retrieved PDF context (OpenAI)",
+    summary="Answer a question using retrieved PDF context (LLM provider)",
 )
 def ask(
     body: AskRequest,
     rag: Annotated[RAGService, Depends(get_rag_service)],
 ) -> AskResponse:
-    """Grounded RAG answer. Does not use external knowledge beyond retrieved chunks."""
+    """Grounded RAG answer via configured LLM (Ollama or OpenAI). No silent fallback."""
     started = time.perf_counter()
     try:
         result = rag.ask(

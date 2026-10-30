@@ -41,11 +41,13 @@ jobs:
       - name: Lint (syntax / compileall)
         run: python -m compileall -q app frontend
 
-      - name: Run automated tests (no live OpenAI)
+      - name: Run automated tests (no live LLM)
         env:
-          # Ensure live tests stay skipped in CI
+          # Ensure live OpenAI/Ollama tests stay skipped in CI
           OPENAI_API_KEY: ""
-        run: pytest -m "not live" -q --tb=short
+          # Unit suite mocks providers; pin openai so missing-key paths stay deterministic
+          LLM_PROVIDER: openai
+        run: pytest -m "not live and not live_ollama" -q --tb=short
 
   docker:
     name: Docker image builds

@@ -1,15 +1,15 @@
-"""Retrieve → ground prompt → OpenAI generate (Phase 3)."""
+"""Retrieve → ground prompt → LLM generate (OpenAI or Ollama)."""
 
 from __future__ import annotations
 
 import logging
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from app.config import Settings
-from app.exceptions import MissingOpenAIKeyError
 from app.services.ingest import IngestService
-from app.services.openai_client import build_openai_client, chat_completion
+from app.services.llm import LLMProvider, build_llm_provider
 from app.services.vector_store import SearchHit
 
 logger = logging.getLogger(__name__)
@@ -188,8 +188,14 @@ class RAGService:
         *,
         document_id: str | None = None,
         top_k: int | None = None,
-        openai_client: object | None = None,
+        llm_provider: LLMProvider | None = None,
+        openai_client: Any | None = None,
     ) -> AskResult:
+        """Answer using retrieved context + the configured LLM provider.
+
+        ``llm_provider`` injects a provider for tests. ``openai_client`` remains
+        supported for OpenAI-path tests (wraps into OpenAIProvider).
+        """
         q = (question or "").strip()
         if not q:
             raise ValueError("question must not be empty")
@@ -215,20 +221,20 @@ class RAGService:
             )
 
         messages = build_messages(q, hits)
-        client = openai_client
-        if client is None:
-            if not (self.settings.openai_api_key or "").strip():
-                raise MissingOpenAIKeyError()
-            client = build_openai_client(
-                api_key=self.settings.openai_api_key,
-                timeout_seconds=self.settings.openai_timeout_seconds,
-                max_retries=self.settings.openai_max_retries,
+        provider = llm_provider
+        if provider is None:
+            provider = build_llm_provider(
+                self.settings,
+                openai_client=openai_client,
             )
+        elif openai_client is not None:
+            raise ValueError("Pass llm_provider or openai_client, not both")
 
-        answer = chat_completion(
-            client,  # type: ignore[arg-type]
-            model=self.settings.openai_model,
-            messages=messages,
+        answer = provider.complete(messages, temperature=0.0)
+        logger.info(
+            "ask_llm provider=%s answer_chars=%s",
+            getattr(provider, "name", type(provider).__name__),
+            len(answer),
         )
         return AskResult(
             question=q,

@@ -29,6 +29,9 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("MAX_UPLOAD_BYTES", str(2 * 1024 * 1024))
     # Default: no real key in unit/API suite (tests that need a key set it explicitly).
     monkeypatch.setenv("OPENAI_API_KEY", "")
+    # Pin OpenAI for the mocked regression suite. Ollama-specific tests override
+    # LLM_PROVIDER=ollama. App default remains ollama via Settings / .env.example.
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
     get_settings.cache_clear()
     yield root
     get_settings.cache_clear()

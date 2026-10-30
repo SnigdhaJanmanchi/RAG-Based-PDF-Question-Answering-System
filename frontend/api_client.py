@@ -251,8 +251,10 @@ class APIClient:
             if status == 503:
                 msg = _user_safe_detail(
                     payload,
-                    "The answer service is unavailable. Check that OPENAI_API_KEY "
-                    "is set on the API server.",
+                    "The answer service is unavailable. For OpenAI set "
+                    "LLM_PROVIDER=openai and OPENAI_API_KEY on the API; "
+                    "for Ollama ensure `ollama serve` is running locally "
+                    "with the configured model.",
                 )
             elif status == 429:
                 msg = _user_safe_detail(

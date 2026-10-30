@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 
 import pytest
 
@@ -14,11 +13,26 @@ from app.services.rag import SYSTEM_PROMPT
 
 @pytest.fixture()
 def openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-real")
     monkeypatch.setenv("SIMILARITY_THRESHOLD", "0.15")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+class _FakeLLM:
+    def __init__(self, answer: str = "ok", *, error: Exception | None = None) -> None:
+        self.name = "openai"
+        self.answer = answer
+        self.error = error
+        self.messages: list | None = None
+
+    def complete(self, messages: list, *, temperature: float = 0.0) -> str:
+        if self.error:
+            raise self.error
+        self.messages = messages
+        return self.answer
 
 
 def _upload(client, sample_pdf_bytes: bytes) -> str:
@@ -33,6 +47,7 @@ def _upload(client, sample_pdf_bytes: bytes) -> str:
 def test_ask_missing_api_key_after_retrieval(
     client, sample_pdf_bytes: bytes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setenv("SIMILARITY_THRESHOLD", "0.15")
     get_settings.cache_clear()
@@ -69,15 +84,13 @@ def test_ask_valid_mocked(
     openai_key,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: dict[str, Any] = {}
-
-    def fake_chat(client_obj: Any, *, model: str, messages: list, temperature: float = 0.0) -> str:
-        captured["messages"] = messages
-        captured["model"] = model
-        return "The indigo phoenix nests at Lake Azure (sample.pdf, page 1)."
-
-    monkeypatch.setattr("app.services.rag.chat_completion", fake_chat)
-    monkeypatch.setattr("app.services.rag.build_openai_client", lambda **kw: object())
+    fake = _FakeLLM(
+        "The indigo phoenix nests at Lake Azure (sample.pdf, page 1)."
+    )
+    monkeypatch.setattr(
+        "app.services.rag.build_llm_provider",
+        lambda settings, **kw: fake,
+    )
 
     doc_id = _upload(client, sample_pdf_bytes)
     response = client.post(
@@ -97,9 +110,10 @@ def test_ask_valid_mocked(
     assert body["sources"][0]["document_id"] == doc_id
     assert body["sources"][0]["filename"] == "sample.pdf"
     assert body["documents"][0]["document_id"] == doc_id
-    assert captured["messages"][0]["content"] == SYSTEM_PROMPT
-    assert "UNTRUSTED_PDF_EXCERPTS_BEGIN" in captured["messages"][1]["content"]
-    assert "indigo phoenix" in captured["messages"][1]["content"].lower()
+    assert fake.messages is not None
+    assert fake.messages[0]["content"] == SYSTEM_PROMPT
+    assert "UNTRUSTED_PDF_EXCERPTS_BEGIN" in fake.messages[1]["content"]
+    assert "indigo phoenix" in fake.messages[1]["content"].lower()
 
 
 def test_ask_provider_failure_mapped(
@@ -108,11 +122,11 @@ def test_ask_provider_failure_mapped(
     openai_key,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(*_a: Any, **_k: Any) -> str:
-        raise OpenAIProviderError("upstream failed")
-
-    monkeypatch.setattr("app.services.rag.chat_completion", boom)
-    monkeypatch.setattr("app.services.rag.build_openai_client", lambda **kw: object())
+    fake = _FakeLLM(error=OpenAIProviderError("upstream failed"))
+    monkeypatch.setattr(
+        "app.services.rag.build_llm_provider",
+        lambda settings, **kw: fake,
+    )
     _upload(client, sample_pdf_bytes)
     response = client.post(
         "/ask",
@@ -127,11 +141,11 @@ def test_ask_rate_limit_mapped(
     openai_key,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(*_a: Any, **_k: Any) -> str:
-        raise OpenAIRateLimitError()
-
-    monkeypatch.setattr("app.services.rag.chat_completion", boom)
-    monkeypatch.setattr("app.services.rag.build_openai_client", lambda **kw: object())
+    fake = _FakeLLM(error=OpenAIRateLimitError())
+    monkeypatch.setattr(
+        "app.services.rag.build_llm_provider",
+        lambda settings, **kw: fake,
+    )
     _upload(client, sample_pdf_bytes)
     response = client.post(
         "/ask",
@@ -162,15 +176,13 @@ def test_ask_prompt_injection_in_pdf_stays_untrusted(
     doc.close()
     pdf_bytes = pdf_path.read_bytes()
 
-    captured: dict[str, Any] = {}
-
-    def fake_chat(client_obj: Any, *, model: str, messages: list, temperature: float = 0.0) -> str:
-        captured["messages"] = messages
-        # Simulate a well-behaved model that follows the system prompt, not the PDF.
-        return "According to the document, the indigo phoenix nests at Lake Azure."
-
-    monkeypatch.setattr("app.services.rag.chat_completion", fake_chat)
-    monkeypatch.setattr("app.services.rag.build_openai_client", lambda **kw: object())
+    fake = _FakeLLM(
+        "According to the document, the indigo phoenix nests at Lake Azure."
+    )
+    monkeypatch.setattr(
+        "app.services.rag.build_llm_provider",
+        lambda settings, **kw: fake,
+    )
 
     upload = client.post(
         "/documents/upload",
@@ -186,10 +198,11 @@ def test_ask_prompt_injection_in_pdf_stays_untrusted(
     body = response.json()
     assert body["status"] == "ok"
     assert "HACKED" not in body["answer"]
-    user_msg = captured["messages"][1]["content"]
+    assert fake.messages is not None
+    user_msg = fake.messages[1]["content"]
     assert "UNTRUSTED_PDF_EXCERPTS_BEGIN" in user_msg
     assert "SYSTEM OVERRIDE" in user_msg
-    assert captured["messages"][0]["content"] == SYSTEM_PROMPT
+    assert fake.messages[0]["content"] == SYSTEM_PROMPT
     # Citations must match retrieved metadata, not fabricated pages.
     assert body["sources"]
     assert all(isinstance(s["page"], int) and s["page"] >= 1 for s in body["sources"])

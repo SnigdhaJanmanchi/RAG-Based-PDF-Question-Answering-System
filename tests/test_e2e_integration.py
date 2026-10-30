@@ -199,15 +199,21 @@ def test_persistence_survives_store_reload(tmp_path, monkeypatch) -> None:
 def test_ask_citations_match_retrieved_sources(
     client, sample_pdf_bytes: bytes, monkeypatch
 ) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("SIMILARITY_THRESHOLD", "0.1")
     get_settings.cache_clear()
 
-    def fake_chat(client_obj, *, model, messages, temperature=0.0):
-        return "The indigo phoenix nests at Lake Azure (sample.pdf, page 1)."
+    class FakeProvider:
+        name = "openai"
 
-    monkeypatch.setattr("app.services.rag.chat_completion", fake_chat)
-    monkeypatch.setattr("app.services.rag.build_openai_client", lambda **kw: object())
+        def complete(self, messages, *, temperature=0.0):
+            return "The indigo phoenix nests at Lake Azure (sample.pdf, page 1)."
+
+    monkeypatch.setattr(
+        "app.services.rag.build_llm_provider",
+        lambda settings, **kw: FakeProvider(),
+    )
 
     doc_id = client.post(
         "/documents/upload",
