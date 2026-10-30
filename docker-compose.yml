@@ -1,0 +1,83 @@
+# Local / portfolio Docker Compose stack.
+# Secrets: copy .env.example → .env. Never commit .env.
+# Default LLM_PROVIDER=ollama (host Ollama on localhost). For OpenAI set
+# LLM_PROVIDER=openai and OPENAI_API_KEY. Do not expose Ollama publicly.
+# Do not publish this stack to the public internet with sensitive PDFs (no auth).
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: ai-pdf-assistant-api:local
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      APP_NAME: ${APP_NAME:-AI PDF Assistant}
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Provider switch (env only). Ollama needs host network access to 127.0.0.1:11434
+      # or extra_hosts — prefer host-network / host Ollama for local demos.
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      # Keys must come from host .env / environment — never baked into the image
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-30}
+      OPENAI_MAX_RETRIES: ${OPENAI_MAX_RETRIES:-2}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:0.6b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-60}
+      OLLAMA_MAX_RETRIES: ${OLLAMA_MAX_RETRIES:-2}
+      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-512}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
+      TOP_K: ${TOP_K:-5}
+      SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.25}
+      CONTEXT_TOKEN_BUDGET: ${CONTEXT_TOKEN_BUDGET:-2500}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+      DATA_DIR: /app/data
+      # Browser→API (Swagger). Streamlit talks server-side to http://api:8000.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8501,http://127.0.0.1:8501}
+      # Use baked model weights; set to 0 only if you intentionally refresh from Hugging Face
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
+      TRANSFORMERS_OFFLINE: ${TRANSFORMERS_OFFLINE:-1}
+    volumes:
+      # Persists uploads + FAISS index + document metadata across restarts.
+      # Do NOT mount over /app/model_cache — that path holds the baked embedding model.
+      - app_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    # Soft guidance — raise on hosts with more RAM (torch + MiniLM)
+    mem_limit: ${API_MEM_LIMIT:-4g}
+    cpus: ${API_CPUS:-2.0}
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    image: ai-pdf-assistant-ui:local
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    environment:
+      API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    mem_limit: ${UI_MEM_LIMIT:-1g}
+    cpus: ${UI_CPUS:-0.5}
+
+volumes:
+  app_data:
