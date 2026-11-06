@@ -155,6 +155,37 @@ class VectorStore:
         with self._lock:
             return self._documents.get(doc_id)
 
+    def list_chunks(
+        self,
+        *,
+        doc_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[SearchHit]:
+        """Return chunks ordered by (filename, chunk_index) for overview retrieval.
+
+        Scores are set to ``1.0`` as a sentinel for document-ordered (non-similarity)
+        selection so citations remain well-formed without implying cosine confidence.
+        """
+        with self._lock:
+            records = list(self._chunks.values())
+            if doc_id is not None:
+                records = [c for c in records if c.doc_id == doc_id]
+            records.sort(key=lambda c: (c.filename.lower(), c.chunk_index, c.vector_id))
+            if limit is not None:
+                records = records[: max(0, limit)]
+            return [
+                SearchHit(
+                    score=1.0,
+                    text=c.text,
+                    doc_id=c.doc_id,
+                    chunk_id=c.chunk_id,
+                    chunk_index=c.chunk_index,
+                    page=c.page,
+                    filename=c.filename,
+                )
+                for c in records
+            ]
+
     def _purge_document_locked(self, doc_id: str, *, delete_upload: bool) -> bool:
         """Remove vectors + registry for doc_id. Caller must hold ``_lock``."""
         if doc_id not in self._documents:

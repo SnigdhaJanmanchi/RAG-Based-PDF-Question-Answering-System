@@ -91,3 +91,68 @@ def test_ask_live_ollama_pdf_e2e(
     assert rss_mb < 3500, f"possible OOM risk: max RSS {rss_mb:.0f} MiB"
 
     get_settings.cache_clear()
+
+
+@pytest.mark.live_ollama
+def test_ask_live_ollama_abstract_drone_topic(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Abstract Drone.pdf + topic question via overview-aware retrieval + Ollama."""
+    if not _ollama_ready():
+        pytest.skip(
+            f"Local Ollama at {OLLAMA_URL} with model {OLLAMA_MODEL} not available"
+        )
+
+    from pathlib import Path
+
+    drone_pdf = Path(__file__).parent / "fixtures" / "abstract_drone.pdf"
+    if not drone_pdf.exists():
+        pytest.skip("abstract_drone.pdf fixture missing")
+
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("OLLAMA_BASE_URL", OLLAMA_URL)
+    monkeypatch.setenv("OLLAMA_MODEL", OLLAMA_MODEL)
+    monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "120")
+    monkeypatch.setenv("SIMILARITY_THRESHOLD", "0.18")
+    monkeypatch.setenv("OVERVIEW_SMALL_DOC_MAX_CHUNKS", "8")
+    get_settings.cache_clear()
+
+    upload = client.post(
+        "/documents/upload",
+        files={
+            "file": (
+                "Abstract Drone.pdf",
+                drone_pdf.read_bytes(),
+                "application/pdf",
+            )
+        },
+    )
+    assert upload.status_code == 200, upload.text
+    doc_id = upload.json()["document_id"]
+
+    ask_started = time.perf_counter()
+    response = client.post(
+        "/ask",
+        json={
+            "question": "What is the topic of this document?",
+            "document_id": doc_id,
+            "top_k": 5,
+        },
+    )
+    ask_ms = (time.perf_counter() - ask_started) * 1000
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "ok", body
+    assert body["sources"], "overview path should return citations"
+    lower = body["answer"].lower()
+    assert (
+        "drone" in lower
+        or "navigation" in lower
+        or "mapping" in lower
+        or "aerial" in lower
+        or "autonomous" in lower
+    ), body["answer"]
+    assert "<think>" not in lower
+    print(f"[live_ollama_topic] ask_ms={ask_ms:.0f} answer={body['answer'][:200]!r}")
+    get_settings.cache_clear()

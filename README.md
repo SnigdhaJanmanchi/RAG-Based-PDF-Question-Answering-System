@@ -20,6 +20,9 @@ AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, e
 | Hardening, retrieval eval, validation report | Done (Phase 5) |
 | Docker Compose + GitHub Actions CI | Done (Phase 6) |
 | Local Ollama provider (`LLM_PROVIDER=ollama`) | Done (default for local dev) |
+| Overview-aware retrieval + threshold 0.18 | Done (topic/summary questions; small-doc fallback) |
+
+Topic / summary questions (e.g. “What is the topic of this document?”, “Summarize…”) use document-scoped overview chunks when semantic scores are weak on small docs. Arbitrary factual questions still require `SIMILARITY_THRESHOLD` matches. Threshold must stay **> 0**.
 
 ---
 
@@ -169,7 +172,10 @@ See `.env.example`. Never commit `.env`, uploads, or FAISS indexes.
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local embeddings (unchanged) |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `200` | Recursive splitter |
 | `TOP_K` | `5` | Default retrieval count |
-| `SIMILARITY_THRESHOLD` | `0.25` | Min cosine score to keep a chunk |
+| `SIMILARITY_THRESHOLD` | `0.18` | Min cosine score to keep a chunk (must stay > 0) |
+| `OVERVIEW_MAX_CHUNKS` | `5` | Leading chunks for topic/summary questions |
+| `OVERVIEW_SMALL_DOC_MAX_CHUNKS` | `8` | Max doc size for weak-score overview fallback |
+| `OVERVIEW_WEAK_SCORE_FLOOR` | `0.08` | Min usable score for that fallback (> 0, < threshold) |
 | `CONTEXT_TOKEN_BUDGET` | `2500` | Approx context budget |
 | `DATA_DIR` | `data` | Uploads + FAISS + metadata |
 | `MAX_UPLOAD_BYTES` | `10485760` | Upload size limit |

@@ -156,3 +156,44 @@ class IngestService:
             raise KeyError(f"Unknown document_id: {doc_id}")
         vector = self.embeddings.embed_query(q)
         return self.store.similarity_search(vector, top_k=k, doc_id=doc_id)
+
+    def document_chunk_count(self, doc_id: str | None = None) -> int:
+        """Return chunk count for one document, or total indexed chunks."""
+        if doc_id is not None:
+            doc = self.store.get_document(doc_id)
+            if doc is None:
+                raise KeyError(f"Unknown document_id: {doc_id}")
+            return int(doc.chunk_count)
+        return sum(d.chunk_count for d in self.store.list_documents())
+
+    def indexed_document_count(self) -> int:
+        """Return how many documents are currently indexed."""
+        return len(self.store.list_documents())
+
+    def overview_chunks(
+        self,
+        *,
+        doc_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[SearchHit]:
+        """Document-ordered leading chunks for overview/summary questions."""
+        if doc_id is not None and self.store.get_document(doc_id) is None:
+            raise KeyError(f"Unknown document_id: {doc_id}")
+        k = limit if limit is not None else self.settings.overview_max_chunks
+        if k < 1:
+            raise ValueError("overview chunk limit must be >= 1")
+        if doc_id is not None:
+            return self.store.list_chunks(doc_id=doc_id, limit=k)
+        # Multi-doc: take leading chunks from each document (round-robin by index).
+        docs = self.store.list_documents()
+        if not docs:
+            return []
+        per_doc = max(1, k // max(1, len(docs)))
+        collected: list[SearchHit] = []
+        for doc in docs:
+            collected.extend(
+                self.store.list_chunks(doc_id=doc.doc_id, limit=per_doc)
+            )
+            if len(collected) >= k:
+                break
+        return collected[:k]

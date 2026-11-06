@@ -208,8 +208,8 @@ def main() -> None:
             st.rerun()
 
         st.caption(
-            "OpenAI key stays on the API server (.env). "
-            "This UI never sends or displays API keys."
+            "LLM provider settings (Ollama or OpenAI) stay on the API server (.env). "
+            "This UI never sends or displays API keys or provider secrets."
         )
 
     # ----- Main: chat -----

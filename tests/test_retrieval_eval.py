@@ -25,7 +25,8 @@ def retrieval_summary(tmp_path_factory):
         chunk_size=400,
         chunk_overlap=80,
         top_k=5,
-        similarity_threshold=0.0,
+        # Offline Hit@K uses raw FAISS search (no ask-time threshold filter).
+        similarity_threshold=0.18,
     )
     embeddings = get_embedding_service(settings.embedding_model)
     store = VectorStore(settings.data_dir, dimension=embeddings.dimension)

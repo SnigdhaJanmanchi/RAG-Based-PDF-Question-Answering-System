@@ -10,6 +10,12 @@ from typing import Any
 from app.config import Settings
 from app.services.ingest import IngestService
 from app.services.llm import LLMProvider, build_llm_provider
+from app.services.overview import (
+    is_explicit_summary_request,
+    is_overview_question,
+    merge_hits_prefer_order,
+    should_use_small_doc_overview,
+)
 from app.services.vector_store import SearchHit
 
 logger = logging.getLogger(__name__)
@@ -182,6 +188,100 @@ class RAGService:
         self.settings = settings
         self.ingest = ingest
 
+    def select_hits(
+        self,
+        question: str,
+        *,
+        document_id: str | None = None,
+        top_k: int | None = None,
+    ) -> list[SearchHit]:
+        """Retrieve and filter hits with overview-aware selection.
+
+        - Factual / arbitrary questions: similarity ≥ SIMILARITY_THRESHOLD only.
+        - Explicit summary requests: prefer document-scoped overview chunks.
+        - Other overview/topic questions: use strong similarity hits when present;
+          for small docs (≤ OVERVIEW_SMALL_DOC_MAX_CHUNKS) with weak-but-usable
+          scores, fall back to overview chunks. Never applies to non-overview Qs.
+        """
+        q = (question or "").strip()
+        if not q:
+            raise ValueError("question must not be empty")
+
+        k = top_k if top_k is not None else self.settings.top_k
+        threshold = self.settings.similarity_threshold
+        if threshold <= 0:
+            raise ValueError("similarity_threshold must be > 0")
+
+        semantic = self.ingest.search(q, top_k=k, doc_id=document_id)
+        strong = filter_by_threshold(semantic, threshold)
+
+        overview = is_overview_question(q)
+        explicit_summary = is_explicit_summary_request(q)
+
+        if explicit_summary:
+            # Document-scoped overview preferred over pure similarity.
+            overview_hits = self.ingest.overview_chunks(
+                doc_id=document_id,
+                limit=self.settings.overview_max_chunks,
+            )
+            hits = merge_hits_prefer_order(
+                overview_hits, strong, limit=max(k, self.settings.overview_max_chunks)
+            )
+            logger.info(
+                "overview_retrieval mode=explicit_summary hits=%s strong=%s",
+                len(hits),
+                len(strong),
+            )
+        elif overview:
+            if strong:
+                hits = strong
+                logger.info("overview_retrieval mode=semantic_strong hits=%s", len(hits))
+            else:
+                try:
+                    chunk_count = self.ingest.document_chunk_count(document_id)
+                except KeyError:
+                    raise
+                # Treat a single-document library as scoped for topic questions.
+                document_scoped = document_id is not None
+                if not document_scoped:
+                    try:
+                        document_scoped = self.ingest.indexed_document_count() == 1
+                    except Exception:  # noqa: BLE001
+                        document_scoped = False
+                if should_use_small_doc_overview(
+                    is_overview=True,
+                    chunk_count=chunk_count,
+                    small_doc_max_chunks=self.settings.overview_small_doc_max_chunks,
+                    semantic_hits=semantic,
+                    similarity_threshold=threshold,
+                    weak_score_floor=self.settings.overview_weak_score_floor,
+                    document_scoped=document_scoped,
+                ):
+                    hits = self.ingest.overview_chunks(
+                        doc_id=document_id,
+                        limit=self.settings.overview_max_chunks,
+                    )
+                    logger.info(
+                        "overview_retrieval mode=small_doc_weak hits=%s "
+                        "chunk_count=%s scoped=%s",
+                        len(hits),
+                        chunk_count,
+                        document_scoped,
+                    )
+                else:
+                    hits = []
+                    logger.info(
+                        "overview_retrieval mode=insufficient chunk_count=%s "
+                        "semantic=%s",
+                        chunk_count,
+                        len(semantic),
+                    )
+        else:
+            hits = strong
+
+        hits = dedupe_hits(hits)
+        return select_within_budget(hits, self.settings.context_token_budget)
+
     def ask(
         self,
         question: str,
@@ -201,10 +301,7 @@ class RAGService:
             raise ValueError("question must not be empty")
 
         k = top_k if top_k is not None else self.settings.top_k
-        hits = self.ingest.search(q, top_k=k, doc_id=document_id)
-        hits = filter_by_threshold(hits, self.settings.similarity_threshold)
-        hits = dedupe_hits(hits)
-        hits = select_within_budget(hits, self.settings.context_token_budget)
+        hits = self.select_hits(q, document_id=document_id, top_k=k)
 
         if not hits:
             logger.info(

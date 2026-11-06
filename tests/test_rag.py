@@ -97,6 +97,9 @@ def test_build_messages_wraps_untrusted_context_and_system_rules() -> None:
 class FakeIngest:
     hits: list[SearchHit]
     error: Exception | None = None
+    overview: list[SearchHit] | None = None
+    chunk_count: int = 3
+    doc_count: int = 1
 
     def search(self, question: str, *, top_k: int | None = None, doc_id: str | None = None):
         if self.error:
@@ -106,6 +109,25 @@ class FakeIngest:
         if doc_id is not None:
             return [h for h in self.hits if h.doc_id == doc_id][: top_k or 5]
         return list(self.hits)[: top_k or 5]
+
+    def document_chunk_count(self, doc_id: str | None = None) -> int:
+        if doc_id is not None and doc_id == "missing":
+            raise KeyError(f"Unknown document_id: {doc_id}")
+        return self.chunk_count
+
+    def indexed_document_count(self) -> int:
+        return self.doc_count
+
+    def overview_chunks(
+        self, *, doc_id: str | None = None, limit: int | None = None
+    ) -> list[SearchHit]:
+        if doc_id is not None and doc_id == "missing":
+            raise KeyError(f"Unknown document_id: {doc_id}")
+        source = list(self.overview) if self.overview is not None else list(self.hits)
+        if doc_id is not None:
+            source = [h for h in source if h.doc_id == doc_id]
+        source = sorted(source, key=lambda h: (h.filename, h.chunk_index))
+        return source[: limit or 5]
 
 
 def _settings(**overrides: Any) -> Settings:

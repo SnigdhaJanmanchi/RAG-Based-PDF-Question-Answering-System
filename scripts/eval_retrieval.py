@@ -38,7 +38,8 @@ def main() -> int:
             chunk_size=400,
             chunk_overlap=80,
             top_k=args.k,
-            similarity_threshold=0.0,  # score all hits for offline eval
+            # Offline Hit@K uses raw FAISS search (ask-time threshold not applied).
+            similarity_threshold=0.18,
         )
         embeddings = get_embedding_service(settings.embedding_model)
         store = VectorStore(settings.data_dir, dimension=embeddings.dimension)

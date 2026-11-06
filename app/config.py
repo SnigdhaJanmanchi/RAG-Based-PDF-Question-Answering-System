@@ -63,9 +63,34 @@ class Settings(BaseSettings):
     chunk_overlap: int = Field(default=200, alias="CHUNK_OVERLAP")
     top_k: int = Field(default=5, alias="TOP_K")
     # Cosine similarity via FAISS IndexFlatIP on L2-normalized vectors.
-    similarity_threshold: float = Field(default=0.25, alias="SIMILARITY_THRESHOLD")
+    # Must stay > 0 (never disable the gate by setting 0).
+    similarity_threshold: float = Field(default=0.18, alias="SIMILARITY_THRESHOLD")
     # Approximate token budget for retrieved context (~4 chars/token).
     context_token_budget: int = Field(default=2500, alias="CONTEXT_TOKEN_BUDGET")
+
+    # Overview-aware retrieval (topic/summary questions only — not arbitrary Q&A).
+    overview_max_chunks: int = Field(
+        default=5,
+        alias="OVERVIEW_MAX_CHUNKS",
+        description="Max leading document chunks used for overview/summary context.",
+    )
+    overview_small_doc_max_chunks: int = Field(
+        default=8,
+        alias="OVERVIEW_SMALL_DOC_MAX_CHUNKS",
+        description=(
+            "Docs with this many chunks or fewer may use the conservative overview "
+            "path when semantic scores are weak but usable (overview questions only)."
+        ),
+    )
+    overview_weak_score_floor: float = Field(
+        default=0.08,
+        alias="OVERVIEW_WEAK_SCORE_FLOOR",
+        description=(
+            "Min cosine score for unscoped multi-doc small-doc overview fallback. "
+            "Must be < SIMILARITY_THRESHOLD. Document-scoped topic questions may "
+            "use overview without meeting this floor."
+        ),
+    )
 
     data_dir: str = Field(default="data", alias="DATA_DIR")
     max_upload_bytes: int = Field(
@@ -79,6 +104,22 @@ class Settings(BaseSettings):
     def _normalize_llm_provider(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip().lower()
+        return value
+
+    @field_validator("similarity_threshold")
+    @classmethod
+    def _threshold_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError(
+                "SIMILARITY_THRESHOLD must be > 0 (refusing to disable the retrieval gate)"
+            )
+        return value
+
+    @field_validator("overview_weak_score_floor")
+    @classmethod
+    def _weak_floor_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("OVERVIEW_WEAK_SCORE_FLOOR must be > 0")
         return value
 
     @property
