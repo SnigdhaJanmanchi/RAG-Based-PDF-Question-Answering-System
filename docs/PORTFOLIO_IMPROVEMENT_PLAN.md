@@ -3,8 +3,9 @@
 **Repo:** [SnigdhaJanmanchi/RAG-Based-PDF-Question-Answering-System](https://github.com/SnigdhaJanmanchi/RAG-Based-PDF-Question-Answering-System)  
 **Baseline reviewed:** `main` @ `066a74d` (Phase 0–6 RAG MVP + Ollama + overview retrieval + Docker/CI)  
 **Plan date:** 2026-11-06  
+**Implemented:** 2026-11-06 (docs-only on draft PR #2)  
 **Scope:** Documentation and GitHub presentation only. **No RAG code changes in this phase.**  
-**Status:** Plan only — **awaiting approval before implementation.**
+**Status:** Implementation pushed on draft PR — **awaiting approval to merge.** GitHub About/topics and screenshots remain manual follow-ups.
 
 ---
 
@@ -389,6 +390,21 @@ Portfolio docs are “done” when:
 
 ---
 
-## 9. Stop point
+## 9. Implementation status (2026-11-06)
 
-This document is the **plan only**. Implementation (README rewrite, architecture doc, media capture, GitHub metadata) starts only after explicit approval.
+| Item | Status |
+|------|--------|
+| Root `README.md` rewrite | Done on draft PR #2 |
+| `docs/ARCHITECTURE.md` (2 Mermaid diagrams) | Done |
+| `docs/README.md` index | Done |
+| Hit@3 / Recall@3 documented accurately | Done |
+| Demo section (describe later captures; no fake images) | Done |
+| GitHub About + topics text in README | Done (user applies in GitHub UI) |
+| Real screenshots / demo video | **Not captured** — manual follow-up |
+| Merge / deploy | **Not done** — draft PR only |
+
+### Remaining manual actions for the user
+
+1. Set repository **About** description and **topics** (wording in root README).  
+2. Capture real screenshots / optional 60–90s demo when convenient; place under `docs/media/` in a follow-up PR.  
+3. Approve merge of draft PR #2 when satisfied — do not treat as production deploy.
