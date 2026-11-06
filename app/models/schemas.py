@@ -1,6 +1,10 @@
 """API request and response models."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+RetrievalType = Literal["overview", "similarity"]
 
 
 class HealthResponse(BaseModel):
@@ -59,6 +63,10 @@ class SearchHitResponse(BaseModel):
     chunk_index: int
     page: int
     filename: str
+    retrieval: RetrievalType = Field(
+        default="similarity",
+        description="'similarity' for FAISS cosine hits; 'overview' for document-ordered chunks",
+    )
 
 
 class SearchResponse(BaseModel):
@@ -86,7 +94,15 @@ class AskSource(BaseModel):
     page: int
     chunk_id: str
     excerpt: str
-    score: float
+    score: float = Field(
+        description="FAISS cosine similarity when retrieval='similarity'; "
+        "not a cosine score when retrieval='overview' (placeholder 0.0)"
+    )
+    retrieval: RetrievalType = Field(
+        default="similarity",
+        description="'similarity' for semantic FAISS hits; 'overview' for "
+        "document-ordered leading chunks (not a cosine of 1.0)",
+    )
 
 
 class AskDocumentRef(BaseModel):

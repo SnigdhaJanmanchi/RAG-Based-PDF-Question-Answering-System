@@ -7,12 +7,14 @@ import logging
 import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import faiss
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+RetrievalType = Literal["overview", "similarity"]
 
 
 @dataclass
@@ -30,7 +32,7 @@ class ChunkRecord:
 
 @dataclass
 class SearchHit:
-    """One similarity search result."""
+    """One retrieval result (semantic similarity or document overview)."""
 
     score: float
     text: str
@@ -39,6 +41,7 @@ class SearchHit:
     chunk_index: int
     page: int
     filename: str
+    retrieval: RetrievalType = "similarity"
 
 
 @dataclass
@@ -163,8 +166,8 @@ class VectorStore:
     ) -> list[SearchHit]:
         """Return chunks ordered by (filename, chunk_index) for overview retrieval.
 
-        Scores are set to ``1.0`` as a sentinel for document-ordered (non-similarity)
-        selection so citations remain well-formed without implying cosine confidence.
+        Hits are tagged ``retrieval="overview"``. ``score`` is ``0.0`` and is **not**
+        a FAISS cosine (do not treat it as similarity confidence of 1.0).
         """
         with self._lock:
             records = list(self._chunks.values())
@@ -175,13 +178,14 @@ class VectorStore:
                 records = records[: max(0, limit)]
             return [
                 SearchHit(
-                    score=1.0,
+                    score=0.0,
                     text=c.text,
                     doc_id=c.doc_id,
                     chunk_id=c.chunk_id,
                     chunk_index=c.chunk_index,
                     page=c.page,
                     filename=c.filename,
+                    retrieval="overview",
                 )
                 for c in records
             ]
@@ -313,6 +317,7 @@ class VectorStore:
                         chunk_index=record.chunk_index,
                         page=record.page,
                         filename=record.filename,
+                        retrieval="similarity",
                     )
                 )
                 if len(hits) >= top_k:

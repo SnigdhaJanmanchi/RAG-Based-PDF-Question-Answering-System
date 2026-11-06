@@ -80,6 +80,12 @@ def test_topic_question_on_abstract_drone(
     assert payload["status"] == "ok"
     assert payload["sources"], "expected overview/semantic sources"
     assert all(s["document_id"] == doc_id for s in payload["sources"])
+    assert all("retrieval" in s for s in payload["sources"])
+    # Topic questions on small docs typically use overview; never treat score as cosine 1.0.
+    if any(s["retrieval"] == "overview" for s in payload["sources"]):
+        assert all(
+            s["score"] != 1.0 for s in payload["sources"] if s["retrieval"] == "overview"
+        )
     lower = payload["answer"].lower()
     assert "drone" in lower or "navigation" in lower or "mapping" in lower
     assert provider.last_messages is not None

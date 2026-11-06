@@ -29,6 +29,7 @@ def _hit(
     page: int = 1,
     chunk_index: int = 0,
     filename: str = "doc.pdf",
+    retrieval: str = "similarity",
 ) -> SearchHit:
     return SearchHit(
         score=score,
@@ -38,6 +39,7 @@ def _hit(
         chunk_index=chunk_index,
         page=page,
         filename=filename,
+        retrieval=retrieval,  # type: ignore[arg-type]
     )
 
 
@@ -210,8 +212,9 @@ def test_topic_question_uses_small_doc_overview_when_weak() -> None:
     overview = [
         _hit(
             "Abstract: This paper presents an autonomous drone navigation system.",
-            score=1.0,
+            score=0.0,
             chunk_index=0,
+            retrieval="overview",
         )
     ]
     weak_semantic = [_hit("unrelated token soup", score=0.12, chunk_index=2)]
@@ -220,11 +223,18 @@ def test_topic_question_uses_small_doc_overview_when_weak() -> None:
     hits = rag.select_hits("What is the topic of this document?", document_id="d1")
     assert hits
     assert "drone" in hits[0].text.lower()
+    assert hits[0].retrieval == "overview"
+    assert hits[0].score != 1.0
 
 
 def test_explicit_summary_prefers_overview_over_similarity() -> None:
     overview = [
-        _hit("Document lead: drones survey farmland.", score=1.0, chunk_index=0)
+        _hit(
+            "Document lead: drones survey farmland.",
+            score=0.0,
+            chunk_index=0,
+            retrieval="overview",
+        )
     ]
     strong_semantic = [
         _hit("Battery voltage peaks at 12.6V", score=0.95, chunk_index=4)
@@ -234,10 +244,18 @@ def test_explicit_summary_prefers_overview_over_similarity() -> None:
     hits = rag.select_hits("Summarize this document", document_id="d1")
     assert hits
     assert "drone" in hits[0].text.lower() or "farmland" in hits[0].text.lower()
+    assert hits[0].retrieval == "overview"
 
 
 def test_factual_question_does_not_use_overview_fallback() -> None:
-    overview = [_hit("Abstract about drones", score=1.0, chunk_index=0)]
+    overview = [
+        _hit(
+            "Abstract about drones",
+            score=0.0,
+            chunk_index=0,
+            retrieval="overview",
+        )
+    ]
     weak = [_hit("voltage peaks", score=0.12, chunk_index=2)]
     ingest = FakeIngest(hits=weak, overview=overview, chunk_count=4)
     rag = RAGService(_settings(), ingest)  # type: ignore[arg-type]
@@ -261,7 +279,13 @@ def test_absent_info_still_insufficient_for_factual() -> None:
 def test_unrelated_question_insufficient() -> None:
     ingest = FakeIngest(
         hits=[_hit("autonomous drone abstract", score=0.04)],
-        overview=[_hit("autonomous drone abstract", score=1.0)],
+        overview=[
+            _hit(
+                "autonomous drone abstract",
+                score=0.0,
+                retrieval="overview",
+            )
+        ],
         chunk_count=2,
     )
     rag = RAGService(_settings(), ingest)  # type: ignore[arg-type]
@@ -274,20 +298,46 @@ def test_unrelated_question_insufficient() -> None:
 
 def test_single_doc_filter_preserved_on_overview() -> None:
     overview = [
-        _hit("alpha abstract", score=1.0, doc_id="doc-a", filename="a.pdf"),
-        _hit("beta abstract", score=1.0, doc_id="doc-b", filename="b.pdf", chunk_index=0),
+        _hit(
+            "alpha abstract",
+            score=0.0,
+            doc_id="doc-a",
+            filename="a.pdf",
+            retrieval="overview",
+        ),
+        _hit(
+            "beta abstract",
+            score=0.0,
+            doc_id="doc-b",
+            filename="b.pdf",
+            chunk_index=0,
+            retrieval="overview",
+        ),
     ]
     ingest = FakeIngest(hits=[], overview=overview, chunk_count=2)
     rag = RAGService(_settings(), ingest)  # type: ignore[arg-type]
     hits = rag.select_hits("Summarize the document", document_id="doc-a")
     assert hits
     assert all(h.doc_id == "doc-a" for h in hits)
+    assert all(h.retrieval == "overview" for h in hits)
 
 
 def test_multi_doc_overview_without_filter() -> None:
     overview = [
-        _hit("alpha abstract", score=1.0, doc_id="doc-a", filename="a.pdf"),
-        _hit("beta abstract", score=1.0, doc_id="doc-b", filename="b.pdf"),
+        _hit(
+            "alpha abstract",
+            score=0.0,
+            doc_id="doc-a",
+            filename="a.pdf",
+            retrieval="overview",
+        ),
+        _hit(
+            "beta abstract",
+            score=0.0,
+            doc_id="doc-b",
+            filename="b.pdf",
+            retrieval="overview",
+        ),
     ]
     ingest = FakeIngest(hits=[], overview=overview, chunk_count=4)
     # Empty semantic + weak floor path needs some weak score for small-doc path;
@@ -295,13 +345,15 @@ def test_multi_doc_overview_without_filter() -> None:
     rag = RAGService(_settings(), ingest)  # type: ignore[arg-type]
     hits = rag.select_hits("Summarize the key findings")
     assert len(hits) >= 1
+    assert all(h.retrieval == "overview" for h in hits)
 
 
 def test_ask_overview_with_mocked_openai() -> None:
     overview = [
         _hit(
             "This study designs a lightweight drone for abstract mapping.",
-            score=1.0,
+            score=0.0,
+            retrieval="overview",
         )
     ]
     ingest = FakeIngest(
@@ -317,12 +369,18 @@ def test_ask_overview_with_mocked_openai() -> None:
     )
     assert result.status == STATUS_OK
     assert result.sources
+    assert result.sources[0].retrieval == "overview"
     assert "drone" in provider.messages[1]["content"].lower()  # type: ignore[index]
+    assert "retrieval=overview" in provider.messages[1]["content"]  # type: ignore[index]
 
 
 def test_ask_overview_with_mocked_ollama() -> None:
     overview = [
-        _hit("Abstract Drone navigation research overview.", score=1.0)
+        _hit(
+            "Abstract Drone navigation research overview.",
+            score=0.0,
+            retrieval="overview",
+        )
     ]
     ingest = FakeIngest(
         hits=[_hit("noise", score=0.10)],
@@ -340,4 +398,5 @@ def test_ask_overview_with_mocked_ollama() -> None:
         llm_provider=provider,
     )
     assert result.status == STATUS_OK
+    assert result.sources[0].retrieval == "overview"
     assert "drone" in result.answer.lower()

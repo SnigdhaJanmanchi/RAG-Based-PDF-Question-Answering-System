@@ -54,6 +54,7 @@ class AskSource:
     chunk_id: str
     excerpt: str
     score: float
+    retrieval: str = "similarity"
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,7 @@ class APIClient:
                 chunk_id=str(s["chunk_id"]),
                 excerpt=str(s["excerpt"]),
                 score=float(s["score"]),
+                retrieval=str(s.get("retrieval") or "similarity"),
             )
             for s in data.get("sources", [])
             if isinstance(s, dict)

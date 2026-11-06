@@ -112,6 +112,7 @@ def test_ask_passes_document_id() -> None:
                         "chunk_id": "d1:p1:c0",
                         "excerpt": "indigo phoenix",
                         "score": 0.9,
+                        "retrieval": "similarity",
                     }
                 ],
                 "documents": [{"document_id": "d1", "filename": "sample.pdf"}],
@@ -122,6 +123,7 @@ def test_ask_passes_document_id() -> None:
         result = client.ask("Where?", document_id="d1", top_k=3)
         assert result.status == "ok"
         assert result.sources[0].page == 1
+        assert result.sources[0].retrieval == "similarity"
         assert seen["payload"]["document_id"] == "d1"
         assert seen["payload"]["top_k"] == 3
 

@@ -83,6 +83,7 @@ def _render_sources(sources: list[dict]) -> None:
                 chunk_id=str(raw["chunk_id"]),
                 excerpt=str(raw["excerpt"]),
                 score=float(raw["score"]),
+                retrieval=str(raw.get("retrieval") or "similarity"),
             )
             st.markdown(format_source_markdown(source))
             st.divider()
@@ -272,6 +273,7 @@ def main() -> None:
                                 "chunk_id": s.chunk_id,
                                 "excerpt": s.excerpt,
                                 "score": s.score,
+                                "retrieval": s.retrieval,
                             }
                             for s in result.sources
                         ]

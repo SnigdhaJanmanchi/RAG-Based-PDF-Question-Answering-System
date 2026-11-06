@@ -179,6 +179,7 @@ def search(
                 chunk_index=h.chunk_index,
                 page=h.page,
                 filename=h.filename,
+                retrieval=h.retrieval,
             )
             for h in hits
         ],
@@ -232,6 +233,7 @@ def ask(
                 chunk_id=s.chunk_id,
                 excerpt=s.excerpt,
                 score=s.score,
+                retrieval=s.retrieval,
             )
             for s in result.sources
         ],

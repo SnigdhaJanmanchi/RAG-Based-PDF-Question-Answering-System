@@ -53,11 +53,20 @@ def test_add_search_and_persist(tmp_path: Path) -> None:
     assert "indigo phoenix" in hits[0].text
     assert hits[0].page == 1
     assert hits[0].doc_id == "d1"
+    assert hits[0].retrieval == "similarity"
+    assert hits[0].score > 0.5
+
+    overview = store.list_chunks(doc_id="d1", limit=1)
+    assert len(overview) == 1
+    assert overview[0].retrieval == "overview"
+    assert overview[0].score == 0.0
+    assert overview[0].score != 1.0
 
     # Reload from disk
     store2 = VectorStore(tmp_path / "data", dimension=dim)
     hits2 = store2.similarity_search(query, top_k=1)
     assert hits2[0].text == hits[0].text
+    assert hits2[0].retrieval == "similarity"
     assert store2.get_document("d1") is not None
 
 

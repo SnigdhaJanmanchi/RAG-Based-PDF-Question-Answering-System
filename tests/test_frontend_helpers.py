@@ -55,9 +55,31 @@ def test_assistant_message_and_citations() -> None:
     assert msg["role"] == "assistant"
     assert msg["sources"][0]["page"] == 1
     assert msg["sources"][0]["filename"] == "sample.pdf"
+    assert msg["sources"][0]["retrieval"] == "similarity"
     md = format_source_markdown(result.sources[0])
     assert "sample.pdf" in md
     assert "page 1" in md
+    assert "similarity 0.880" in md
+    assert "Document overview" not in md
+
+
+def test_overview_citation_labeled_not_as_similarity_score() -> None:
+    source = AskSource(
+        "d1",
+        "Abstract Drone.pdf",
+        1,
+        "d1:p1:c0",
+        "autonomous drone navigation abstract",
+        0.0,
+        retrieval="overview",
+    )
+    md = format_source_markdown(source)
+    assert "Document overview" in md
+    assert "similarity" not in md
+    assert "score" not in md.lower()
+    # Must not present overview as a cosine of 1.0
+    assert "1.000" not in md
+    assert "0.000" not in md
 
 
 def test_insufficient_flag() -> None:

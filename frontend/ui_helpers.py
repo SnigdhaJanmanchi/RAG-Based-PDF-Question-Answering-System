@@ -71,8 +71,12 @@ def format_source_markdown(source: AskSource) -> str:
     excerpt = source.excerpt.strip().replace("\n", " ")
     if len(excerpt) > 400:
         excerpt = excerpt[:397] + "..."
+    if source.retrieval == "overview":
+        qualifier = "Document overview"
+    else:
+        qualifier = f"similarity {source.score:.3f}"
     return (
-        f"**{source.filename}** · page {source.page} · score {source.score:.3f}\n\n"
+        f"**{source.filename}** · page {source.page} · {qualifier}\n\n"
         f"> {excerpt}"
     )
 
@@ -91,6 +95,7 @@ def assistant_message_from_ask(result: AskResult) -> dict[str, Any]:
                 "chunk_id": s.chunk_id,
                 "excerpt": s.excerpt,
                 "score": s.score,
+                "retrieval": s.retrieval,
             }
             for s in result.sources
         ],

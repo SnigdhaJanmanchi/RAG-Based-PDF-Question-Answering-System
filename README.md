@@ -24,6 +24,8 @@ AI PDF Assistant converts PDFs into a searchable knowledge base: extract text, e
 
 Topic / summary questions (e.g. “What is the topic of this document?”, “Summarize…”) use document-scoped overview chunks when semantic scores are weak on small docs. Arbitrary factual questions still require `SIMILARITY_THRESHOLD` matches. Threshold must stay **> 0**.
 
+**Similarity vs overview retrieval:** Semantic hits come from FAISS cosine similarity (`retrieval="similarity"`) and keep their real scores. Overview hits are document-ordered leading chunks (`retrieval="overview"`) used for topic/summary questions — they are **not** a cosine of 1.0. The Streamlit citation UI labels them **Document overview** instead of showing a similarity score.
+
 ---
 
 ## Technology stack
@@ -210,7 +212,7 @@ There is **no** delete-document HTTP route yet; the Streamlit UI does not show a
 }
 ```
 
-Response includes `answer`, `status` (`ok` | `insufficient_evidence`), `sources` (filename, page, excerpt, score), and `documents`.
+Response includes `answer`, `status` (`ok` | `insufficient_evidence`), `sources` (filename, page, excerpt, score, `retrieval` = `similarity` | `overview`), and `documents`.
 
 ---
 

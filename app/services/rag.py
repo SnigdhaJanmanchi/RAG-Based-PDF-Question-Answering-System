@@ -16,7 +16,7 @@ from app.services.overview import (
     merge_hits_prefer_order,
     should_use_small_doc_overview,
 )
-from app.services.vector_store import SearchHit
+from app.services.vector_store import RetrievalType, SearchHit
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class SourceCitation:
     chunk_id: str
     excerpt: str
     score: float
+    retrieval: RetrievalType = "similarity"
 
 
 @dataclass(frozen=True)
@@ -133,9 +134,13 @@ def build_context_block(hits: list[SearchHit]) -> str:
     """Format retrieved chunks as untrusted data for the user message."""
     parts: list[str] = []
     for i, hit in enumerate(hits, start=1):
+        if hit.retrieval == "overview":
+            score_part = "retrieval=overview"
+        else:
+            score_part = f"retrieval=similarity | score={hit.score:.4f}"
         parts.append(
             f"[Excerpt {i} | document_id={hit.doc_id} | filename={hit.filename} "
-            f"| page={hit.page} | chunk_id={hit.chunk_id} | score={hit.score:.4f}]\n"
+            f"| page={hit.page} | chunk_id={hit.chunk_id} | {score_part}]\n"
             f"{hit.text.strip()}"
         )
     body = "\n\n".join(parts)
@@ -168,6 +173,7 @@ def hits_to_sources(hits: list[SearchHit]) -> list[SourceCitation]:
             chunk_id=h.chunk_id,
             excerpt=h.text,
             score=h.score,
+            retrieval=h.retrieval,
         )
         for h in hits
     ]
