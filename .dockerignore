@@ -1,0 +1,51 @@
+.git
+.github
+.venv
+venv
+env
+ENV
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+.tox
+.cache
+.idea
+.vscode
+
+# Secrets — never bake into images
+.env
+.env.*
+!.env.example
+
+# Runtime / user data
+data/*
+!data/.gitkeep
+*.log
+logs/
+
+# Local model / torch caches
+*.pt
+*.bin
+sentence-transformers/
+.transformers_cache/
+HF_HOME/
+TRANSFORMERS_CACHE/
+
+# Docs / tests not needed in runtime images (CI still uses host checkout)
+# Keep tests out of production images to shrink context
+tests/
+docs/
+scripts/
+*.md
+!README.md
+
+# Docker meta
+Dockerfile*
+docker-compose*.yml
+.dockerignore

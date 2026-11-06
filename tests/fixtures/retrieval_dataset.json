@@ -1,0 +1,74 @@
+[
+  {
+    "id": "phoenix-nest",
+    "fixture": "sample.pdf",
+    "question": "Where does the indigo phoenix nest?",
+    "expected_pages": [1],
+    "expected_phrases": ["Lake Azure", "indigo phoenix"]
+  },
+  {
+    "id": "phoenix-year",
+    "fixture": "sample.pdf",
+    "question": "In what year did the indigo phoenix nest at Lake Azure?",
+    "expected_pages": [1],
+    "expected_phrases": ["1842"]
+  },
+  {
+    "id": "warehouse-code",
+    "fixture": "multipage_facts.pdf",
+    "question": "What is the primary warehouse code?",
+    "expected_pages": [1],
+    "expected_phrases": ["WH-NORTH-17"]
+  },
+  {
+    "id": "emergency-ext",
+    "fixture": "multipage_facts.pdf",
+    "question": "What is the emergency contact extension?",
+    "expected_pages": [1],
+    "expected_phrases": ["4421"]
+  },
+  {
+    "id": "courier",
+    "fixture": "multipage_facts.pdf",
+    "question": "Which courier handles standard parcels?",
+    "expected_pages": [2],
+    "expected_phrases": ["Blue Courier"]
+  },
+  {
+    "id": "hazard-form",
+    "fixture": "multipage_facts.pdf",
+    "question": "What form is required for hazardous materials?",
+    "expected_pages": [2],
+    "expected_phrases": ["HM-9"]
+  },
+  {
+    "id": "shelf-load",
+    "fixture": "multipage_facts.pdf",
+    "question": "What is the maximum shelf load?",
+    "expected_pages": [3],
+    "expected_phrases": ["250 kilograms", "250"]
+  },
+  {
+    "id": "widget-location",
+    "fixture": "multipage_facts.pdf",
+    "question": "Where is Widget-A stored?",
+    "expected_pages": [3],
+    "expected_phrases": ["Bin-14"]
+  },
+  {
+    "id": "otter",
+    "fixture": "second_doc.pdf",
+    "question": "Where does the cerulean otter hibernate?",
+    "expected_pages": [1],
+    "expected_phrases": ["Kelp Bay"]
+  },
+  {
+    "id": "absent-fact",
+    "fixture": "multipage_facts.pdf",
+    "question": "What is the CEO salary for Project Atlas?",
+    "expected_pages": [],
+    "expected_phrases": [],
+    "expect_no_strong_hit": true,
+    "notes": "Answer not in document — retrieval should not invent CEO content"
+  }
+]
